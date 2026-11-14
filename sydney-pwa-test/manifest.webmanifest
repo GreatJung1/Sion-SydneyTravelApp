@@ -1,1 +1,14 @@
-{"name":"Sydney Travel Test","short_name":"Sydney Test","description":"아이폰 PWA 설치와 로컬 저장 테스트","start_url":"./","scope":"./","display":"standalone","background_color":"#f5f4f1","theme_color":"#f5f4f1","icons":[{"src":"./icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"./icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}
+{
+  "name": "Sydney 2026 Shared Test",
+  "short_name": "Sydney Sync",
+  "description": "3인 공동 여행 앱 - 실시간 공유 테스트",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f4f1",
+  "theme_color": "#f5f4f1",
+  "icons": [
+    {"src":"./icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"./icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}

@@ -1,9 +1,126 @@
-const KEY='sydney-pwa-test-records-v1';
-const $=id=>document.getElementById(id);
-function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(x)?x:[]}catch{return []}}
-function render(){const items=read();$('count').textContent=`${items.length}건`;const box=$('entries');box.replaceChildren();if(!items.length){const p=document.createElement('p');p.className='empty';p.textContent='아직 저장한 기록이 없습니다.';box.append(p)}items.slice().reverse().forEach(x=>{const d=document.createElement('div');d.className='entry';const title=document.createElement('div');title.textContent=`${x.memo} · ${Number(x.amount).toLocaleString('ko-KR')} AUD`;const small=document.createElement('small');small.textContent=new Date(x.createdAt).toLocaleString('ko-KR');d.append(title,small);box.append(d)})}
-$('save').addEventListener('click',()=>{const memo=$('memo').value.trim(),raw=$('amount').value,amount=Number(raw);if(!memo||raw===''||!Number.isFinite(amount)||amount<0){$('message').textContent='메모와 올바른 금액을 입력하세요.';return}try{const items=read();items.push({id:crypto.randomUUID?.()||String(Date.now()),memo,amount,createdAt:new Date().toISOString()});localStorage.setItem(KEY,JSON.stringify(items));$('memo').value='';$('amount').value='';$('message').textContent='저장 완료! 앱을 완전히 닫고 다시 열어보세요.';render()}catch(e){$('message').textContent='저장 실패: 기기 저장 공간 또는 브라우저 설정을 확인하세요.'}});
-$('export').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({format:'sydney-pwa-test',version:1,exportedAt:new Date().toISOString(),records:read()},null,2)],{type:'application/json'});const a=document.createElement('a');const url=URL.createObjectURL(blob);a.href=url;a.download='sydney-test-backup.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000)});
-function network(){ $('net').textContent=navigator.onLine?'온라인 연결됨':'오프라인 상태';}addEventListener('online',network);addEventListener('offline',network);network();
-$('mode').textContent=matchMedia('(display-mode: standalone)').matches||navigator.standalone?'홈 화면 앱 모드로 실행 중':'브라우저 모드: Safari 공유 → 홈 화면에 추가';
-if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js').then(()=>{ $('sw').textContent='오프라인 준비 등록됨. 온라인에서 한 번 열고, 앱을 닫았다가 비행기 모드로 재실행해 보세요.'}).catch(e=>{$('sw').textContent='오프라인 등록 실패: HTTPS 주소인지 확인하세요.'})}else $('sw').textContent='이 브라우저에서는 오프라인 기능을 지원하지 않습니다.';render();
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-app.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-auth.js';
+import { getFirestore, collection, addDoc, onSnapshot, orderBy, query, serverTimestamp } from 'https://www.gstatic.com/firebasejs/13.3.0/firebase-firestore.js';
+import { firebaseConfig } from './firebase-config.js';
+
+const $ = (id) => document.getElementById(id);
+const show = (id, visible) => { $(id).hidden = !visible; $(id).classList.toggle('hidden', !visible); };
+const setMessage = (id, text, isError = false) => { $(id).textContent = text; $(id).classList.toggle('error', isError); };
+const updateNetwork = () => { $('net').textContent = navigator.onLine ? '온라인' : '오프라인 (동기화 불가)'; };
+addEventListener('online', updateNetwork);
+addEventListener('offline', updateNetwork);
+updateNetwork();
+
+const configured = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('REPLACE_')
+  && firebaseConfig.appId && !firebaseConfig.appId.includes('REPLACE_');
+if (!configured) {
+  show('setup', true);
+  $('session').textContent = '연결 설정 필요';
+} else {
+  try {
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const notesCollection = collection(db, 'trips', 'sydney2026', 'sharedNotes');
+    let unsubscribe = null;
+    let currentNotes = [];
+
+    function render(notes) {
+      const box = $('entries');
+      box.replaceChildren();
+      $('count').textContent = `${notes.length}건`;
+      if (!notes.length) {
+        const p = document.createElement('p');
+        p.className = 'subtext';
+        p.textContent = '아직 공유된 메모가 없어. 첫 번째 기록을 추가해 봐.';
+        box.append(p);
+      }
+      for (const item of notes) {
+        const div = document.createElement('div'); div.className = 'record';
+        const p = document.createElement('p'); p.textContent = item.text || '';
+        const small = document.createElement('small');
+        const date = item.createdAt?.toDate?.();
+        small.textContent = `${date ? date.toLocaleString('ko-KR') : '동기화 중'} · 작성자 UID ${String(item.createdBy || '').slice(0, 7)}…`;
+        div.append(p, small); box.append(div);
+      }
+    }
+
+    onAuthStateChanged(auth, (user) => {
+      if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+      currentNotes = [];
+      show('loginBox', !user);
+      show('notesBox', !!user);
+      $('session').textContent = user ? '로그인됨' : '로그인 필요';
+      if (!user) { setMessage('loginMsg', ''); return; }
+      $('who').textContent = `접속 계정: ${user.email || ''}`;
+      setMessage('noteMsg', 'Firestore에서 기록을 불러오는 중…');
+      const q = query(notesCollection, orderBy('createdAt', 'desc'));
+      unsubscribe = onSnapshot(q, (snapshot) => {
+        currentNotes = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        render(currentNotes);
+        setMessage('noteMsg', snapshot.metadata.fromCache
+          ? '캐시 데이터 표시 중. 서버 연결 상태를 확인해.'
+          : '서버와 동기화됨. 다른 계정에서도 같은 기록을 볼 수 있어.');
+      }, (error) => {
+        setMessage('noteMsg', error.code === 'permission-denied'
+          ? '접근 거부: Firestore 규칙에 현재 계정의 UID가 포함됐는지 확인해.'
+          : `동기화 오류: ${error.code || error.message}`, true);
+      });
+    });
+
+    $('loginForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const btn = $('loginBtn'); btn.disabled = true;
+      setMessage('loginMsg', '로그인 중…');
+      try {
+        await signInWithEmailAndPassword(auth, $('email').value.trim(), $('password').value);
+        $('password').value = '';
+        setMessage('loginMsg', '');
+      } catch (error) {
+        setMessage('loginMsg', error.code === 'auth/invalid-credential'
+          ? '이메일 또는 비밀번호를 확인해.'
+          : `로그인 실패: ${error.code || error.message}`, true);
+      } finally { btn.disabled = false; }
+    });
+
+    $('logout').addEventListener('click', async () => {
+      try { await signOut(auth); } catch (error) { setMessage('noteMsg', `로그아웃 실패: ${error.code}`, true); }
+    });
+
+    $('noteForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const text = $('note').value.trim();
+      if (!text || text.length > 300 || !auth.currentUser) return;
+      if (!navigator.onLine) { setMessage('noteMsg', '이번 버전은 온라인에서만 기록을 추가해.', true); return; }
+      const btn = $('addBtn'); btn.disabled = true;
+      setMessage('noteMsg', '서버에 저장하는 중…');
+      try {
+        await addDoc(notesCollection, { text, createdBy: auth.currentUser.uid, createdAt: serverTimestamp() });
+        $('note').value = '';
+        setMessage('noteMsg', '서버에 저장 완료. 다른 계정에서 확인해.');
+      } catch (error) {
+        setMessage('noteMsg', error.code === 'permission-denied'
+          ? '저장 거부: Firestore 규칙에 로그인 UID가 포함됐는지 확인해.'
+          : `저장 실패: ${error.code || error.message}`, true);
+      } finally { btn.disabled = false; }
+    });
+
+    $('export').addEventListener('click', () => {
+      const data = {
+        format: 'sydney-shared-notes-test', version: 1, exportedAt: new Date().toISOString(),
+        notes: currentNotes.map(({ id, text, createdBy, createdAt }) => ({
+          id, text, createdBy, createdAt: createdAt?.toDate?.()?.toISOString() || null
+        }))
+      };
+      const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}));
+      const a = document.createElement('a');
+      a.href = url; a.download = `sydney-shared-notes-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 20000);
+    });
+  } catch (error) {
+    show('setup', true);
+    $('setup').querySelector('p').textContent = `Firebase 초기화 오류: ${error.message}`;
+    $('session').textContent = '초기화 실패';
+  }
+}
