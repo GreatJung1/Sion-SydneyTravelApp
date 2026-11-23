@@ -1,0 +1,598 @@
+/* ===== 로그인 페이지 전용 배경: 앤티크 책상과 부드러운 조명 ===== */
+@import url("https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&display=swap");
+
+
+.letter-entry {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: calc(24px + env(safe-area-inset-top)) 18px
+    calc(24px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  overflow-x: clip;
+  background:
+    radial-gradient(ellipse at 50% 34%, rgba(167, 130, 115, 0.23), transparent 58%),
+    repeating-linear-gradient(96deg, rgba(123, 67, 67, 0.009) 0 2px, transparent 2px 12px),
+    linear-gradient(125deg, #42382e 0%, #201b17 44%, #121512 100%);
+  color: #f0e0c7;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+/* ===== 배경 중앙에 드리운 실제적인 확산광 ===== */
+.letter-entry__spotlight {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 54% 43%, transparent 14%, rgba(0, 0, 0, 0.52) 95%);
+}
+
+.letter-entry--loading {
+  font-size: 25px;
+  letter-spacing: .14em;
+}
+
+/* ===== 처음 보이는 소개 문구와 봉투 ===== */
+.letter-entry__intro {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  text-align: center;
+  animation: entry-fade .6s ease both;
+}
+
+.letter-entry__eyebrow {
+   font-family: "HappyGoheung", serif;
+  margin: 0 0 0;
+  color: #bfa789;
+  font-size: 20px;
+  letter-spacing: .31em;
+}
+
+.letter-entry__intro-title {
+  margin: 0 0 0px;
+   font-family: "HappyGoheung", serif;
+  font-size: clamp(26px, 8vw, 40px);
+  font-weight: 400;
+  font-size: 60px;
+  font-style: italic;
+  letter-spacing: -.035em;
+  color: #f4e8d7;
+}
+
+/* ===== 봉투 버튼: 이미지 없이 CSS 입체 구조 ===== */
+.letter-entry__envelope {
+  position: relative;
+  display: block;
+  width: min(390px, calc(100vw - 44px));
+  aspect-ratio: 1.53;
+  border: 0;
+  border-radius: 3px;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  background: transparent;
+  color: #756045;
+  cursor: pointer;
+  perspective: 1100px;
+  filter: drop-shadow(0 50px 50px rgba(0, 0, 0, 0.53))
+    drop-shadow(0 5px 6px rgba(0,0,0,.25));
+  -webkit-tap-highlight-color: transparent;
+}
+
+.letter-entry__envelope:focus-visible {
+  outline: 3px solid #e1c394;
+  outline-offset: 9px;
+}
+
+.letter-entry__envelope:disabled { cursor: default; }
+
+/* ===== 봉투 뒷면 ===== */
+.letter-entry__envelope-back {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 1px solid #b5a086;
+  background: linear-gradient(155deg, #d7c3a7, #e5d5be 53%, #c2a889);
+  box-shadow: inset 0 3px 17px rgba(80,50,27,.18);
+}
+
+/* ===== 봉투 안의 편지: 덮개가 열리면 위로 올라옴 ===== */
+.letter-entry__peek-paper {
+  position: absolute;
+  z-index: 2;
+  top: 10%;
+  left: 8%;
+  width: 84%;
+  height: 76%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  box-sizing: border-box;
+  padding: 28px 12px;
+  background:
+    repeating-linear-gradient(0deg, rgba(85,68,47,.025) 0 1px, transparent 1px 4px),
+    linear-gradient(120deg, #fbf4e7, #e9d8bd);
+  border: 1px solid rgba(141,106,67,.55);
+  box-shadow: 0 3px 10px rgba(56,38,20,.27);
+  transform: translateY(18%);
+  transition: transform .9s cubic-bezier(.2,.72,.2,1) .38s;
+}
+
+.letter-entry__peek-small { font-size: 9px; letter-spacing: .22em; }
+.letter-entry__peek-title { font-size: clamp(21px, 6vw, 29px); letter-spacing: .05em; }
+.letter-entry__peek-line { width: 45%; height: 1px; background: #b59a76; }
+
+/* ===== 접힌 종이의 좌우 면 ===== */
+.letter-entry__fold {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.letter-entry__fold--left {
+  z-index: 3;
+  clip-path: polygon(0 0, 58% 51%, 0 100%);
+  background: linear-gradient(120deg, #e9dac5, #c3a98a);
+}
+
+.letter-entry__fold--right {
+  z-index: 3;
+  clip-path: polygon(100% 0, 42% 51%, 100% 100%);
+  background: linear-gradient(240deg, #e7d6be, #cbb394);
+}
+
+/* ===== 접힌 종이의 하단 주머니 ===== */
+.letter-entry__fold--bottom {
+  z-index: 4;
+  clip-path: polygon(0 100%, 50% 43%, 100% 100%);
+  background: linear-gradient(165deg, #ebdac2ac 0%, #d5bb99 84%);
+  filter: drop-shadow(0 -2px 4px rgba(90,65,38,.12));
+}
+
+/* ===== 열리는 삼각형 봉투 덮개 ===== */
+.letter-entry__flap {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  clip-path: polygon(0 0, 100% 0, 50% 60%);
+  background: linear-gradient(175deg, #dac9b0 8%, #d2b999 90%);
+  transform-origin: 50% 0;
+  backface-visibility: hidden;
+  transition: transform .62s cubic-bezier(.38,.02,.2,1);
+  filter: drop-shadow(0 4px 4px rgba(78,54,31,.22));
+}
+
+/* ===== 작은 밀랍 도장 ===== */
+.letter-entry__wax {
+  font-family: "HappyGoheung", serif;
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: 56%;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  /* ===== 도장 속 S 글자 세로 위치 조정 ===== */
+line-height: 1;
+padding-top: 18px;
+box-sizing: border-box;
+  transform: translate(-50%,-50%);
+  border: 2px solid #99544b;
+  border-radius: 48% 52% 54% 46%;
+  background: radial-gradient(circle at 30% 28%, #91564c, #713a35 65%, #381919);
+  box-shadow: 0 3px 7px rgba(49,26,20,.37), inset 0 0 0 5px rgba(53, 4, 2, 0.35), inset 0 0 0 7px rgba(218,153,125,.25);
+  font-size: 40px;
+  font-style: italic;
+  color: #e4b8a1;
+  text-shadow: 0 1px 2px #3d2020;
+  transition: opacity .22s ease, transform .3s ease;
+}
+
+/* ===== 봉투를 누른 후 덮개 열기 / 편지 꺼내기 ===== */
+.letter-entry__envelope.is-opening .letter-entry__flap {
+  transform: rotateX(180deg);
+}
+
+.letter-entry__envelope.is-opening .letter-entry__wax {
+  opacity: 0;
+  transform: translate(-50%,-50%) scale(.65);
+}
+
+.letter-entry__envelope.is-opening .letter-entry__peek-paper {
+  transform: translateY(-58%);
+}
+
+.letter-entry__envelope.is-opening {
+  animation: envelope-leave .4s ease 1.18s both;
+}
+
+@keyframes envelope-leave {
+  to { opacity: 0; transform: translateY(34px) scale(.93); }
+}
+
+
+/* ===== 봉투 개봉 안내: 작고 은은하게 ===== */
+.letter-entry__instruction {
+  margin: 18px 0 0;
+  font-family: "HappyGoheung", serif;
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: rgba(226, 208, 184, 0.68);
+}
+
+.letter-entry__date {
+  margin: 18px 0 0;
+  font-size: 10px;
+  letter-spacing: .23em;
+  color: #b4a08a;
+}
+
+/* ===== 봉투 속에서 나온 진짜 로그인 편지 ===== */
+.letter-entry__paper {
+  width: min(100%, 430px);
+  box-sizing: border-box;
+  padding: 15px;
+  background:
+    repeating-linear-gradient(90deg, rgba(117, 84, 52, 0.018) 0 1px, transparent 1px 5px),
+    linear-gradient(135deg, #b6ab99 0%, #eddec9 58%, #e8d5b7 100%);
+  border: 1px solid #bfa889;
+  color: #42362a;
+  box-shadow:
+    0 44px 70px rgba(0,0,0,.54),
+    0 10px 24px rgba(0,0,0,.3),
+    inset 0 0 30px rgba(133,97,51,.12);
+  transform-origin: center 70%;
+  animation: letter-rise .8s cubic-bezier(.16,.76,.19,1) both;
+}
+
+/* ===== 안쪽 인쇄 테두리 ===== */
+.letter-entry__paper-border {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-sizing: border-box;
+  padding: clamp(24px, 6vw, 34px) clamp(16px, 6vw, 28px) 22px;
+  border: 4px solid rgba(71, 51, 23, 0.54);
+  outline: 2px solid rgba(104, 79, 47, 0.2);
+  outline-offset: -6px;
+}
+
+.letter-entry__letterhead {
+  margin: 0 0 18px;
+  font-size: 9px;
+  letter-spacing: .25em;
+  color: #8c775a;
+}
+
+.letter-entry__monogram {
+  display: grid;
+  place-items: center;
+  width: 47px;
+  height: 47px;
+  margin-bottom: 18px;
+  border: 1px solid #9c8061;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px #eee0c9, 0 0 0 5px rgba(156,128,97,.5);
+  font-size: 25px;
+  font-style: italic;
+  color: #70533c;
+}
+
+.letter-entry__salutation {
+  margin: 0 0 5px;
+  font-size: 12px;
+  font-style: italic;
+  color: #786753;
+}
+
+.letter-entry__paper-title {
+  margin: 0;
+  font-size: clamp(35px, 9vw, 48px);
+  line-height: 1.2;
+  font-weight: 400;
+  letter-spacing: -.045em;
+  white-space: nowrap;
+}
+
+.letter-entry__paper-title em { font-weight: 400; }
+
+
+/* ===== SYDNEY '26 아래 구분선 ===== */
+/* 비밀번호 입력칸 아래 선과 동일한 디자인 */
+.letter-entry__divider {
+  display: block;
+  width: 70%;
+  height: 2px;
+  margin: 16px 0 17px;
+  background: rgba(75, 57, 39, 0.72);
+
+  /* 기존 가운데 장식 문자 숨기기 */
+  font-size: 0;
+  overflow: hidden;
+}
+
+/* 기존 양옆 장식선 제거 */
+.letter-entry__divider::before,
+.letter-entry__divider::after {
+  display: none;
+}
+
+.letter-entry__message {
+  margin: 0 0 10px;
+  font-family: "HappyGoheung", serif;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.65;
+  word-break: keep-all;
+}
+
+
+/* ===== 실제 Firebase 폼: 종이에 직접 입력 ===== */
+.letter-entry__form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.letter-entry__form label {
+  margin-bottom: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .17em;
+  color: #75614a;
+}
+
+
+/* ===== 편지지에 직접 쓰는 듯한 비밀번호 입력란 ===== */
+.letter-entry__form input {
+  display: block;
+  box-sizing: border-box;
+  width: 70%;
+  margin-inline: auto;
+  min-width: 0;
+  height: 44px;
+  padding: 0 4px 5px;
+
+  /* 입력창의 배경과 네모난 테두리 완전히 제거 */
+  background: transparent;
+  background-color: transparent;
+  border: none;
+  border-bottom: 2px solid rgba(75, 57, 39, 0.72);
+  border-radius: 0;
+  box-shadow: none;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+
+  /* 편지지에 적힌 잉크처럼 표현 */
+  color: #4b3927;
+  font-family: Georgia, "Apple SD Gothic Neo", serif;
+  font-size: 16px;
+  text-align: center;
+
+  transition: border-color 0.2s ease;
+}
+
+/* ===== 입력 중에도 종이와 같은 배경 유지 ===== */
+.letter-entry__form input:focus {
+  background: transparent;
+  border-bottom-color: #4b3927;
+  box-shadow: none;
+  outline: none;
+}
+
+/* ===== 연한 잉크색 안내 문구 ===== */
+.letter-entry__form input::placeholder {
+  color: rgba(75, 57, 39, 0.46);
+  opacity: 1;
+}
+
+/* ===== 자동완성 시 브라우저 배경색 방지 ===== */
+.letter-entry__form input:-webkit-autofill,
+.letter-entry__form input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #4b3927;
+  -webkit-box-shadow: 0 0 0 1000px #f3eadb inset;
+}
+
+
+.letter-entry__form input:focus {
+  border-color: #70543a;
+  box-shadow: 0 0 0 3px rgba(112,84,58,.12);
+}
+
+
+/* ===== 종이 위에 직접 서명하는 버튼 ===== */
+.letter-entry__form .letter-entry__sign-button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  min-height: 95px;
+  padding: 10px 0 13px;
+
+  /* 초록색 박스 완전히 제거 */
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+
+  color: #563e2b;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+/* ===== 손글씨 수락 문구 ===== */
+.letter-entry__sign-label {
+
+
+/* ===== 수락 문구: 오른쪽 이동량 축소 ===== */
+transform: translate(35px, -10px);
+
+  font-family: "Nanum Pen Script", cursive;
+  font-size: 32px;
+  font-weight: 400;
+  color: #493625;
+
+  transition: opacity 0.2s ease;
+}
+
+/* ===== 처음에는 서명 그림 숨기기 ===== */
+.letter-entry__sign-drawing {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+
+  width: 220px;
+  height: 55px;
+
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ===== 잉크로 한 획씩 그리는 애니메이션 ===== */
+.letter-entry__sign-drawing path {
+  stroke: #493625;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+}
+
+/* ===== 버튼을 누르면 문구 대신 서명 표시 ===== */
+.letter-entry__sign-button.is-signing
+.letter-entry__sign-label {
+  opacity: 0;
+}
+
+.letter-entry__sign-button.is-signing
+.letter-entry__sign-drawing {
+  opacity: 1;
+}
+
+.letter-entry__sign-button.is-signing
+.letter-entry__sign-drawing path {
+  animation: write-signature 1.05s ease-in-out forwards;
+}
+
+/* ===== 잉크가 왼쪽부터 그려지는 동작 ===== */
+@keyframes write-signature {
+  from {
+    stroke-dashoffset: 100;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ===== 클릭 및 비활성 상태 ===== */
+.letter-entry__sign-button:hover .letter-entry__sign-label {
+  color: #342416;
+}
+
+.letter-entry__sign-button:disabled {
+  cursor: wait;
+}
+
+
+.letter-entry__error {
+  margin: 4px 0 0;
+  color: #9e3e34;
+  font-family: "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  font-size: 12px;
+}
+
+.letter-entry__signature {
+  margin: 24px 0 10px;
+  font-style: italic;
+  font-size: 13px;
+  color: #876d51;
+}
+
+.letter-entry__footer {
+  margin: 0;
+  font-size: 9px;
+  letter-spacing: .18em;
+  color: #9c8566;
+}
+
+@keyframes entry-fade {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes letter-rise {
+  from { opacity: 0; transform: translateY(38px) scale(.91); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ===== 세로 공간이 작은 아이폰에서 자연스럽게 스크롤 ===== */
+@media (max-height: 720px) {
+  .letter-entry { justify-content: flex-start; }
+  .letter-entry__paper { margin-block: auto; }
+  .letter-entry__intro { margin-block: auto; }
+  .letter-entry__intro-title { margin-bottom: 44px; }
+  .letter-entry__instruction { margin-top: 55px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .letter-entry *, .letter-entry *::before, .letter-entry *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* ===== ③ 행복고흥체 - 중간 굵기 ===== */
+@font-face {
+  font-family: "HappyGoheung";
+  src: url("https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_twelve@1.0/행복고흥M.woff") format("woff");
+  font-weight: 500;
+  font-display: swap;
+}
+
+/* ===== 초대장 메인 문구 ===== */
+.letter-entry__message {
+  margin: 0 0 0px;
+  font-family: "HappyGoheung", serif;
+  font-size: 23px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* ===== 비밀번호 안내 문구 ===== */
+.letter-entry__submessage {
+  font-family: "HappyGoheung", serif;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+/* ===== 초대 수락하기 ===== */
+.letter-entry__sign-label {
+  font-family: "HappyGoheung", serif;
+  font-size: 36px;
+  font-weight: 700;
+}
+
+
+

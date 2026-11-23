@@ -601,7 +601,10 @@ function App() {
     initialLocal.current = snapshot;
     try {
       if (!localStorage.getItem("sydney-pre-firestore-backup-v1")) {
-        localStorage.setItem("sydney-pre-firestore-backup-v1", JSON.stringify(snapshot));
+        localStorage.setItem(
+          "sydney-pre-firestore-backup-v1",
+          JSON.stringify(snapshot),
+        );
       }
     } catch {
       // ===== 기기 저장공간 부족 시에도 Firebase 연결은 유지 =====
@@ -626,15 +629,27 @@ function App() {
   // ===== 서버 데이터가 정상 도착한 뒤에만 로컬 사본 갱신 =====
   useEffect(() => {
     if (cloudStatus !== "ready") return;
-    try { localStorage.setItem("sydney-days-v1", JSON.stringify(days)); } catch { /* 저장 공간 부족 */ }
+    try {
+      localStorage.setItem("sydney-days-v1", JSON.stringify(days));
+    } catch {
+      /* 저장 공간 부족 */
+    }
   }, [cloudStatus, days]);
   useEffect(() => {
     if (cloudStatus !== "ready") return;
-    try { localStorage.setItem("sydney-visited-v1", JSON.stringify(visited)); } catch { /* 저장 공간 부족 */ }
+    try {
+      localStorage.setItem("sydney-visited-v1", JSON.stringify(visited));
+    } catch {
+      /* 저장 공간 부족 */
+    }
   }, [cloudStatus, visited]);
   useEffect(() => {
     if (cloudStatus !== "ready") return;
-    try { localStorage.setItem("sydney-expenses-v2", JSON.stringify(expenses)); } catch { /* 저장 공간 부족 */ }
+    try {
+      localStorage.setItem("sydney-expenses-v2", JSON.stringify(expenses));
+    } catch {
+      /* 저장 공간 부족 */
+    }
   }, [cloudStatus, expenses]);
 
   // ===== 최초 이전 전에 현재 기기의 기록을 JSON 파일로 내려받기 =====
@@ -655,23 +670,32 @@ function App() {
   async function beginSharedTrip() {
     const local = initialLocal.current;
     if (cloudStatus !== "setup" || uploading || !local) return;
-    if (!window.confirm(
-      `이 기기의 ${local.days.length}일 일정·방문 ${local.visited.length}개·경비 ${local.expenses.length}건을 공동 DB의 최초 데이터로 등록할까?\n다른 기기에 더 최신 기록이 있다면 취소해야 해.`,
-    )) return;
+    if (
+      !window.confirm(
+        `이 기기의 ${local.days.length}일 일정·방문 ${local.visited.length}개·경비 ${local.expenses.length}건을 공동 DB의 최초 데이터로 등록할까?\n다른 기기에 더 최신 기록이 있다면 취소해야 해.`,
+      )
+    )
+      return;
     setUploading(true);
     setCloudError("");
     try {
       const created = await initializeTripOnce(local);
-      if (!created) setCloudError("이미 다른 기기가 공동 데이터를 시작했어. 서버 기록을 불러오는 중이야.");
+      if (!created)
+        setCloudError(
+          "이미 다른 기기가 공동 데이터를 시작했어. 서버 기록을 불러오는 중이야.",
+        );
     } catch (error) {
-      setCloudError(error instanceof Error ? error.message : "초기 업로드에 실패했어.");
+      setCloudError(
+        error instanceof Error ? error.message : "초기 업로드에 실패했어.",
+      );
     } finally {
       setUploading(false);
     }
   }
 
   const [likes, setLikes] = useState<string[]>(["Opera House"]);
-  const selected = days.find((d) => d.day === selectedDay) ?? days[0] ?? seedDays[0];
+  const selected =
+    days.find((d) => d.day === selectedDay) ?? days[0] ?? seedDays[0];
   const doneToday = selected.stops.filter((s) => visited.includes(s.id)).length;
 
   // ===== 전체 여행 일정 개수 =====
@@ -814,42 +838,85 @@ function App() {
       <main style={{ padding: 32, textAlign: "center" }}>
         <h2>공동 기록 연결 실패</h2>
         <p role="alert">{cloudError}</p>
-        <button type="button" onClick={() => window.location.reload()}>다시 시도</button>
+        <button type="button" onClick={() => window.location.reload()}>
+          다시 시도
+        </button>
       </main>
     );
   }
 
   if (cloudStatus === "setup") {
     return (
-      <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24 }}>
-        <section style={{ width: "100%", maxWidth: 420, display: "grid", gap: 14 }}>
+      <main
+        style={{
+          minHeight: "100dvh",
+          display: "grid",
+          placeItems: "center",
+          padding: 24,
+        }}
+      >
+        <section
+          style={{ width: "100%", maxWidth: 420, display: "grid", gap: 14 }}
+        >
           <h1>SYDNEY ’26</h1>
           <h2>공동 여행 기록 시작하기</h2>
-          <p>아직 Firestore에 공동 일정이 없어. <strong>최신 일정이 들어 있는 기기에서만</strong> 아래 버튼을 눌러.</p>
           <p>
-            이 기기: {initialLocal.current?.days.length ?? 0}일 일정 ·
-            장소 {initialLocal.current?.days.reduce((sum, day) => sum + day.stops.length, 0) ?? 0}곳 ·
-            방문 {initialLocal.current?.visited.length ?? 0}개 ·
-            경비 {initialLocal.current?.expenses.length ?? 0}건
+            아직 Firestore에 공동 일정이 없어.{" "}
+            <strong>최신 일정이 들어 있는 기기에서만</strong> 아래 버튼을 눌러.
           </p>
-          <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+          <p>
+            이 기기: {initialLocal.current?.days.length ?? 0}일 일정 · 장소{" "}
+            {initialLocal.current?.days.reduce(
+              (sum, day) => sum + day.stops.length,
+              0,
+            ) ?? 0}
+            곳 · 방문 {initialLocal.current?.visited.length ?? 0}개 · 경비{" "}
+            {initialLocal.current?.expenses.length ?? 0}건
+          </p>
+          <div
+            style={{
+              maxHeight: 180,
+              overflowY: "auto",
+              border: "1px solid #ddd",
+              borderRadius: 8,
+              padding: 12,
+            }}
+          >
             {initialLocal.current?.days.map((day) => (
-              <div key={day.day}>12월 {day.day}일 — {day.title} ({day.stops.length}곳)</div>
+              <div key={day.day}>
+                12월 {day.day}일 — {day.title} ({day.stops.length}곳)
+              </div>
             ))}
           </div>
-          <button type="button" onClick={downloadLocalBackup} style={{ padding: 14 }}>
+          <button
+            type="button"
+            onClick={downloadLocalBackup}
+            style={{ padding: 14 }}
+          >
             이 기기 기록 JSON 백업
           </button>
           <button
             type="button"
             onClick={() => void beginSharedTrip()}
             disabled={uploading}
-            style={{ padding: 16, background: "#222", color: "#fff", borderRadius: 10 }}
+            style={{
+              padding: 16,
+              background: "#222",
+              color: "#fff",
+              borderRadius: 10,
+            }}
           >
             {uploading ? "업로드 중..." : "이 기기 기록으로 공동 DB 시작"}
           </button>
-          {cloudError && <p role="alert" style={{ color: "#b42318" }}>{cloudError}</p>}
-          <small>다른 아이폰에서는 초기 업로드하지 않아도 돼. 공동 DB가 만들어지면 자동으로 불러와.</small>
+          {cloudError && (
+            <p role="alert" style={{ color: "#b42318" }}>
+              {cloudError}
+            </p>
+          )}
+          <small>
+            다른 아이폰에서는 초기 업로드하지 않아도 돼. 공동 DB가 만들어지면
+            자동으로 불러와.
+          </small>
         </section>
       </main>
     );
@@ -1059,7 +1126,22 @@ function App() {
       <main className="app-content">
         <header className="topbar">
           <div className="brand-mark">
-            <span className="brand-star">✳</span> SYDNEY
+            {/* ===== 모든 기기에서 동일하게 보이는 별표 로고 ===== */}
+            <span className="brand-star">
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3.5"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M12 3V21 M3 12H21 M5.6 5.6L18.4 18.4 M1F8.4 5.6L5.6 18.4" />
+              </svg>
+            </span>{" "}
+            SYDNEY
             <span className="brand-apostrophe">’</span>26
           </div>
           <div className="topbar-right">

@@ -3,7 +3,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
-import AuthGate from "./AuthGate";
+// ===== 새로운 비밀의 문 로그인 화면 불러오기 =====
+import AuthGate from "./AuthGate.tsx";
 
 // ===== React 앱 시작 =====
 createRoot(document.getElementById("root")!).render(
