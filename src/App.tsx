@@ -1511,7 +1511,6 @@ function App() {
               <label>
                 장소 / 일정 이름
                 <input
-                  autoFocus
                   value={stopName}
                   onChange={(e) => setStopName(e.target.value)}
                   placeholder="예: Sydney Opera House"

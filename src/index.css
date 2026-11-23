@@ -1529,3 +1529,61 @@ color: #282B26;
   outline-offset: 3px;
   border-radius: 3px;
 }
+
+
+/* ===== 아이폰 일정 추가·수정 창 너비 오류 수정 ===== */
+@media (max-width: 600px) {
+
+  /* 팝업 배경이 화면 너비를 벗어나지 않도록 제한 */
+  .modal-backdrop {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  /* 일정 추가 창을 아이폰 화면에 맞춤 */
+  .modal-panel.stop-modal {
+    width: 100%;
+    max-width: 440px;
+    min-width: 0;
+    max-height: calc(100dvh - env(safe-area-inset-top) - 8px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 내부 폼과 입력 항목이 가로로 늘어나지 않도록 설정 */
+  .stop-modal form,
+  .stop-modal label {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* 시간·장소·상세 내용·카테고리 입력창 조정 */
+  .stop-modal input,
+  .stop-modal select {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+
+    /* 아이폰 Safari의 입력 시 자동 확대 방지 */
+    font-size: 16px;
+  }
+
+  /* 제목과 닫기 버튼이 서로 밀어내지 않도록 설정 */
+  .stop-modal .modal-head {
+    width: 100%;
+    min-width: 0;
+    gap: 12px;
+  }
+
+  .stop-modal .modal-head > div {
+    min-width: 0;
+  }
+
+  .stop-modal .close-button {
+    flex-shrink: 0;
+  }
+}
