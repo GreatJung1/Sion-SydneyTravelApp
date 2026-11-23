@@ -1,127 +1,56 @@
-
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { MapLocation } from "./MapPicker";
 
-// ===== 일정에서 수집된 지도 위치 데이터 =====
 type CollectionPlace = {
   id: string;
   day: number;
   name: string;
   mapLocation?: MapLocation;
 };
+type Mode = "walking" | "transit" | "driving";
 
-// ===== 지도 컬렉션: 저장된 위치를 모두 표시 =====
+/* ===== 방문 여부가 지도에 표시되는 공동 장소 지도 ===== */
 export default function MapCollection({
-  places,
-}: {
-  places: CollectionPlace[];
-}) {
-  const mapElement = useRef<HTMLDivElement | null>(
-    null
-  );
-
-  // ===== 저장된 장소가 변경되면 지도 갱신 =====
+  places, visited, routeMode,
+}: { places: CollectionPlace[]; visited: string[]; routeMode: Mode }) {
+  const mapElement = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!mapElement.current) return;
-
-    const map = L.map(mapElement.current, {
-      scrollWheelZoom: false,
-    }).setView(
-      [-33.8688, 151.2093],
-      11
-    );
-
-    // ===== OpenStreetMap 지도 배경 =====
-    L.tileLayer(
-      "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-      {
-        maxZoom: 19,
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      }
-    ).addTo(map);
-
-    // ===== 저장된 좌표 모음 =====
+    const map = L.map(mapElement.current, {scrollWheelZoom: false})
+      .setView([-33.8688, 151.2093], 11);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "© OpenStreetMap contributors",
+    }).addTo(map);
     const bounds: L.LatLngExpression[] = [];
-
     for (const place of places) {
-      const location = place.mapLocation;
-
-      // ===== 좌표가 없는 기존 링크 일정은 지도 핀 제외 =====
-      if (!location) continue;
-
-      const point: L.LatLngExpression = [
-        location.lat,
-        location.lng,
-      ];
-
+      const loc = place.mapLocation;
+      if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) continue;
+      const done = visited.includes(place.id);
+      const point: L.LatLngExpression = [loc.lat, loc.lng];
       bounds.push(point);
-
-      // ===== 장소마다 지도 핀 추가 =====
-      const pin = L.circleMarker(point, {
-        radius: 8,
-        color: "#fff",
-        weight: 2,
-        fillColor: "#526448",
-        fillOpacity: 1,
-      }).addTo(map);
-
-      // ===== 핀에 날짜와 장소명 표시 =====
-      const label = document.createElement(
-        "span"
-      );
-
-      label.textContent =
-        `12월 ${place.day}일 · ${place.name}`;
-
-      pin.bindTooltip(label);
-
-      // ===== 핀을 누르면 Google Maps 열기 =====
-      pin.on("click", () => {
-        const coordinates =
-          `${location.lat},${location.lng}`;
-
-        const url =
-          "https://www.google.com/maps/search/?api=1&query=" +
-          encodeURIComponent(coordinates);
-
-        window.open(
-          url,
-          "_blank",
-          "noopener,noreferrer"
-        );
+      // ===== 완료=체크 핀, 미완료=일반 핀 =====
+      const pin = L.divIcon({
+        className: "trip-collection-icon",
+        html: `<span class="${done ? "completed" : "pending"}">${done ? "✓" : "•"}</span>`,
+        iconSize: [28, 28], iconAnchor: [14, 14],
+      });
+      const marker = L.marker(point, {icon: pin}).addTo(map);
+      const tooltip = document.createElement("span");
+      tooltip.textContent = `12월 ${place.day}일 · ${place.name} · ${done ? "방문 완료" : "미방문"}`;
+      marker.bindTooltip(tooltip);
+      marker.on("click", () => {
+        const dest = encodeURIComponent(`${loc.lat},${loc.lng}`);
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=${routeMode}`,
+          "_blank", "noopener,noreferrer");
       });
     }
-
-    // ===== 등록된 장소가 한 개일 때 =====
-    if (bounds.length === 1) {
-      map.setView(bounds[0], 15);
-    }
-
-    // ===== 등록된 장소가 여러 개일 때 =====
-    else if (bounds.length > 1) {
-      map.fitBounds(
-        L.latLngBounds(bounds),
-        {
-          padding: [25, 25],
-          maxZoom: 15,
-        }
-      );
-    }
-
-    // ===== 기존 지도 제거 및 리소스 정리 =====
-    return () => {
-      map.remove();
-    };
-  }, [places]);
-
-  return (
-    <div
-      className="map-collection-map"
-      ref={mapElement}
-      aria-label="여행 장소 지도"
-    />
-  );
+    if (bounds.length === 1) map.setView(bounds[0], 15);
+    if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), {padding:[25,25], maxZoom:15});
+    const timer = window.setTimeout(() => map.invalidateSize(), 0);
+    return () => {window.clearTimeout(timer); map.remove();};
+  }, [places, visited, routeMode]);
+  return <div className="map-collection-map" ref={mapElement} aria-label="방문 완료 여부가 표시된 여행 장소 지도" />;
 }

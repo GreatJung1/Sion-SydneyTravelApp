@@ -1,0 +1,95 @@
+
+/* ===== 하루 동선 전체 화면 ===== */
+.day-route-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 22, 18, 0.75);
+}
+
+.day-route-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 650px);
+  height: 90dvh;
+  background: #f7f3ec;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+/* ===== 지도 상단 ===== */
+.day-route-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 19px 20px;
+  color: #342c24;
+}
+
+.day-route-header small {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #847464;
+}
+
+.day-route-header h2 {
+  margin: 5px 0 0;
+  font-size: 23px;
+}
+
+.day-route-header button {
+  border: 0;
+  background: transparent;
+  color: #624835;
+  cursor: pointer;
+}
+
+/* ===== 실제 지도 ===== */
+.day-route-canvas {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ===== 번호 핀 ===== */
+.day-route-pin {
+  background: transparent;
+  border: none;
+}
+
+.day-route-pin span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #624835;
+  color: #fff8ed;
+  border: 2px solid #f8eedf;
+  box-sizing: border-box;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 2px 7px rgba(0,0,0,.22);
+}
+
+/* ===== 하단 장소 개수 ===== */
+.day-route-footer {
+  padding: 13px 20px;
+  color: #786957;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ===== 아이폰에서는 전체 화면 ===== */
+@media (max-width: 650px) {
+  .day-route-panel {
+    width: 100%;
+    height: 100dvh;
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

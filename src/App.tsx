@@ -1,4 +1,5 @@
 import SydneyWeather from "./components/SydneyWeather";
+import DailyRouteMap from "./components/DailyRouteMap";
 
 /* ===== Firebase 공동 일정/방문/경비 동기화 ===== */
 import {
@@ -460,6 +461,60 @@ function getGoogleMapsUrl(stop: Stop): string | null {
   return null;
 }
 
+/* ===== FOUR-FEATURES 2026 ===== */
+/* ===== 무료 Google Maps 길찾기: 지도 좌표가 정확할 때만 표시 ===== */
+type DirectionsMode = "walking" | "transit" | "driving";
+function getDirectionsUrl(stop: Stop, mode: DirectionsMode): string | null {
+  const loc = stop.mapLocation;
+  if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng))
+    return null;
+  const destination = encodeURIComponent(`${loc.lat},${loc.lng}`);
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=${mode}`;
+}
+
+/* ===== 좌표 간 직선거리 (m): Haversine 공식 ===== */
+function distanceMeters(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+) {
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLon = (b.lng - a.lng) * rad;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
+  return 6371000 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function formatDistance(meters: number) {
+  return meters < 1000
+    ? `${Math.round(meters)}m`
+    : `${(meters / 1000).toFixed(1)}km`;
+}
+
+function formatLinkedExpenseSummary(
+  expenses: Expense[],
+  stopId: string,
+): string | null {
+  const linked = expenses.filter((e) => e.stopId === stopId);
+  if (linked.length === 0) return null;
+
+  const aud = linked
+    .filter((e) => e.currency !== "KRW")
+    .reduce((sum, e) => sum + e.amountCents, 0);
+
+  const krw = linked
+    .filter((e) => e.currency === "KRW")
+    .reduce((sum, e) => sum + e.amountCents, 0);
+
+  const values: string[] = [];
+
+  if (aud > 0) values.push(`A$${(aud / 100).toFixed(2)}`);
+  if (krw > 0) values.push(`₩${krw.toLocaleString("ko-KR")}`);
+
+  return values.join(" · ");
+}
+
 function getTripCountdown() {
   const start = Date.UTC(2026, 11, 15);
   const now = new Date();
@@ -516,6 +571,21 @@ function ProgressBar({
 function App() {
   const [tab, setTab] = useState<Tab>("home");
 
+  /* ===== 저장 탭 방문 필터·내 주변·길찾기 모드 ===== */
+  const [savedFilter, setSavedFilter] = useState<"all" | "todo" | "done">(
+    "all",
+  );
+  const [nearby, setNearby] = useState(false);
+  const [myPosition, setMyPosition] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [geoMessage, setGeoMessage] = useState("");
+  const [routeMode, setRouteMode] = useState<DirectionsMode>("walking");
+  /* ===== 일정에서 경비 추가 시 전달할 ID (저장 이후 초기화) ===== */
+  const [expenseFromStop, setExpenseFromStop] = useState<string | null>(null);
+
   // ===== 선택된 여행 날짜 =====
   const [selectedDay, setSelectedDay] = useState(16);
 
@@ -545,6 +615,8 @@ function App() {
 
   // ===== 현재 수정·삭제 메뉴가 열린 일정 ID =====
   const [openSwipeId, setOpenSwipeId] = useState<string | null>(null);
+  // ===== 오른쪽으로 밀었을 때 왼쪽에 열리는 경비·길찾기 메뉴 =====
+  const [openQuickSwipeId, setOpenQuickSwipeId] = useState<string | null>(null);
 
   // ===== 손가락 또는 마우스가 처음 닿은 좌표 =====
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
@@ -572,6 +644,9 @@ function App() {
   const [stopCategory, setStopCategory] = useState<Stop["category"]>("spot");
 
   const [reels, setReels] = useState(seedReels);
+
+  /* ===== 날짜별 동선 지도 열림 상태 ===== */
+  const [showDayMap, setShowDayMap] = useState(false);
 
   // ===== 실제 경비 기록을 브라우저 저장소에서 불러오기 =====
   const [expenses, setExpenses] = useState<Expense[]>(() => {
@@ -727,9 +802,75 @@ function App() {
     [days],
   );
 
+  /* ===== 방문 필터 및 위치순 정렬: 위치 정보는 기기 내 메모리에만 보관 ===== */
+  const visiblePlaces = useMemo(() => {
+    const filtered = mapCollection.filter(
+      (place) =>
+        savedFilter === "all" ||
+        (savedFilter === "done"
+          ? visited.includes(place.id)
+          : !visited.includes(place.id)),
+    );
+    if (!nearby || !myPosition) return filtered;
+    return filtered
+      .filter(
+        (place) =>
+          place.mapLocation &&
+          Number.isFinite(place.mapLocation.lat) &&
+          Number.isFinite(place.mapLocation.lng),
+      )
+      .sort(
+        (a, b) =>
+          distanceMeters(myPosition, a.mapLocation!) -
+          distanceMeters(myPosition, b.mapLocation!),
+      );
+  }, [mapCollection, visited, savedFilter, nearby, myPosition]);
+
+  function toggleNearby() {
+    if (nearby) {
+      setNearby(false);
+      return;
+    }
+    if (myPosition) {
+      setNearby(true);
+      return;
+    }
+    if (!navigator.geolocation) {
+      setGeoMessage("이 브라우저는 위치 확인을 지원하지 않아.");
+      return;
+    }
+    setGeoLoading(true);
+    setGeoMessage("");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setMyPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setGeoLoading(false);
+        setNearby(true);
+      },
+      (err) => {
+        setGeoLoading(false);
+        setGeoMessage(
+          err.code === 1
+            ? "위치 권한이 거부됐어. 브라우저 설정에서 허용해 줘."
+            : "현재 위치를 가져오지 못했어. 다시 시도해 줘.",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 },
+    );
+  }
+
   // ===== 홈 화면에도 표시할 전체 지출 합계 (AUD) =====
   const totalExpense = useMemo(
-    () => expenses.reduce((sum, expense) => sum + expense.amountCents, 0) / 100,
+    () => ({
+      aud:
+        expenses
+          .filter((e) => e.currency !== "KRW")
+          .reduce((sum, e) => sum + e.amountCents, 0) / 100,
+
+      krw: expenses
+        .filter((e) => e.currency === "KRW")
+        .reduce((sum, e) => sum + e.amountCents, 0),
+    }),
     [expenses],
   );
 
@@ -979,10 +1120,25 @@ function App() {
             };
 
             // 왼쪽으로 밀면 열기, 오른쪽으로 밀면 닫기
+            // ===== 왼쪽으로 밀기: 기존 수정·삭제 메뉴 =====
+            // ===== 오른쪽으로 밀기: 신규 경비·길찾기 메뉴 =====
+
             if (dx < 0) {
-              setOpenSwipeId(s.id);
+              // 경비·길찾기 메뉴가 열려 있었다면 먼저 닫기
+              if (openQuickSwipeId === s.id) {
+                setOpenQuickSwipeId(null);
+              } else {
+                setOpenSwipeId(s.id);
+                setOpenQuickSwipeId(null);
+              }
             } else {
-              setOpenSwipeId(null);
+              // 수정·삭제 메뉴가 열려 있었다면 먼저 닫기
+              if (openSwipeId === s.id) {
+                setOpenSwipeId(null);
+              } else {
+                setOpenQuickSwipeId(s.id);
+                setOpenSwipeId(null);
+              }
             }
           }}
           // ===== 스크롤 등으로 동작이 취소되면 초기화 =====
@@ -990,6 +1146,58 @@ function App() {
             swipeStart.current = null;
           }}
         >
+          {/* ===== 왼쪽에 숨어 있는 경비·길찾기 메뉴 ===== */}
+          {tab === "plan" && (
+            <div
+              className={`stop-swipe-actions stop-swipe-actions-left ${
+                openQuickSwipeId === s.id ? "is-active" : ""
+              }`}
+              aria-hidden={openQuickSwipeId !== s.id}
+            >
+              {/* ===== 해당 일정에 연결해서 경비 추가 ===== */}
+              <button
+                type="button"
+                className="swipe-quick-expense"
+                tabIndex={openQuickSwipeId === s.id ? 0 : -1}
+                aria-label={`${s.name} 경비 추가`}
+                onClick={() => {
+                  setOpenQuickSwipeId(null);
+                  setExpenseFromStop(s.id);
+                  setTab("money");
+                }}
+              >
+                <Wallet size={17} />
+                <span>경비</span>
+              </button>
+
+              {/* ===== Google Maps 길찾기 ===== */}
+              {getDirectionsUrl(s, routeMode) ? (
+                <a
+                  className="swipe-quick-directions"
+                  href={getDirectionsUrl(s, routeMode)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  tabIndex={openQuickSwipeId === s.id ? 0 : -1}
+                  aria-label={`${s.name} 길찾기`}
+                  onClick={() => setOpenQuickSwipeId(null)}
+                >
+                  <Navigation size={17} />
+                  <span>길찾기</span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  className="swipe-quick-directions"
+                  disabled
+                  title="먼저 일정에 지도 위치를 등록해 줘"
+                >
+                  <Navigation size={17} />
+                  <span>위치 없음</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* ===== 오른쪽에 숨어 있는 수정·삭제 메뉴 ===== */}
           {tab === "plan" && (
             <div
@@ -1031,7 +1239,11 @@ function App() {
           {/* ===== 좌우로 움직이는 일정 본문 ===== */}
           <div
             className={`stop-swipe-content ${
-              tab === "plan" && openSwipeId === s.id ? "is-open" : ""
+              tab === "plan" && openSwipeId === s.id
+                ? "is-open"
+                : tab === "plan" && openQuickSwipeId === s.id
+                  ? "is-open-left"
+                  : ""
             }`}
           >
             <div
@@ -1057,10 +1269,14 @@ function App() {
                     }
 
                     // ===== 수정·삭제 메뉴가 열렸으면 먼저 닫기 =====
-                    if (openSwipeId === s.id) {
-                      setOpenSwipeId(null);
-                      return;
-                    }
+                    if (
+  openSwipeId === s.id ||
+  openQuickSwipeId === s.id
+) {
+  setOpenSwipeId(null);
+  setOpenQuickSwipeId(null);
+  return;
+}
 
                     // ===== 완료 상태 변경 =====
                     toggleVisited(s.id);
@@ -1088,26 +1304,39 @@ function App() {
                 <span className="stop-time">{s.time}</span>
 
                 {/* ===== 장소명 클릭: Google Maps 열기 ===== */}
-                <span className="stop-copy">
-                  {getGoogleMapsUrl(s) ? (
-                    <a
-                      href={getGoogleMapsUrl(s) ?? undefined}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="stop-name-link"
-                      // ===== 스와이프 이벤트와 분리 =====
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onPointerUp={(e) => e.stopPropagation()}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <strong>{s.name}</strong>
-                    </a>
-                  ) : (
-                    <strong>{s.name}</strong>
-                  )}
 
-                  <small>{s.detail}</small>
-                </span>
+                
+<span className="stop-copy">
+  {/* ===== 장소 이름 ===== */}
+  {getGoogleMapsUrl(s) ? (
+    <a
+      href={getGoogleMapsUrl(s) ?? undefined}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="stop-name-link"
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <strong>{s.name}</strong>
+    </a>
+  ) : (
+    <strong>{s.name}</strong>
+  )}
+
+  {/* ===== 장소 설명 ===== */}
+  {s.detail && (
+    <small>{s.detail}</small>
+  )}
+
+  {/* ===== 해당 장소에 연결된 경비 합계 ===== */}
+  {tab === "plan" &&
+    expenses.some((e) => e.stopId === s.id) && (
+      <span className="trip-stop-spent">
+        사용 {formatLinkedExpenseSummary(expenses, s.id)}
+      </span>
+    )}
+</span>
 
                 {/* ===== 홈 화면에서만 화살표 표시 ===== */}
                 {tab === "home" && (
@@ -1145,11 +1374,11 @@ function App() {
             <span className="brand-apostrophe">’</span>26
           </div>
           <div className="topbar-right">
-            <span className="preview-badge">UI PREVIEW</span>
+            {/* <span className="preview-badge">UI PREVIEW</span> */}
             <div className="avatar-stack">
               <span>J</span>
-              <span>1</span>
-              <span>2</span>
+              {/* <span>1</span>
+              <span>2</span> */}
             </div>
           </div>
         </header>
@@ -1239,8 +1468,11 @@ function App() {
                     <Wallet size={19} />
                   </span>
                   <span>
-                    <strong>A${totalExpense.toFixed(2)}</strong>
-                    <small>기록된 공동 지출 · 예시</small>
+                    <strong>A${totalExpense.aud.toFixed(2)}</strong>
+                    <small>
+                      원화 ₩{totalExpense.krw.toLocaleString("ko-KR")} · 기록된
+                      공동 지출
+                    </small>
                   </span>
                   <ArrowUpRight size={17} />
                 </button>
@@ -1291,6 +1523,16 @@ function App() {
               {/* ===== 해당 날짜의 전체 일정 목록 ===== */}
               {stopList}
 
+              {/* ===== 날짜별 동선 지도 열기 ===== */}
+              <button
+                type="button"
+                className="plan-add-button"
+                onClick={() => setShowDayMap(true)}
+              >
+                <MapPin size={17} />
+                오늘 동선 지도로 보기
+              </button>
+
               {/* ===== 모든 일정 아래에 추가 버튼 ===== */}
               <div className="plan-add-area">
                 <button
@@ -1313,6 +1555,9 @@ function App() {
         {tab === "money" && (
           <ExpenseTracker
             expenses={expenses}
+            itineraryDays={days}
+            initialStopId={expenseFromStop}
+            onInitialStopConsumed={() => setExpenseFromStop(null)}
             // ===== 새로운 지출 등록 =====
             onAddExpense={(expense) => {
               void addSharedExpense(expense).catch((error: Error) => {
@@ -1395,21 +1640,78 @@ function App() {
             <section className="block-section">
               <SectionTitle
                 eyebrow="PLACES FROM OUR TRIP"
-                title={`지도 컬렉션 · ${mapCollection.length}`}
+                title={`지도 컬렉션 · ${visiblePlaces.length}`}
               />
 
               {/* ===== 등록된 모든 위치를 지도에 핀으로 표시 ===== */}
-              <MapCollection places={mapCollection} />
+              {/* ===== 전체 / 미방문 / 완료 / 내 주변 + 길찾기 방법 ===== */}
+              <div className="trip-saved-controls">
+                <div className="trip-saved-filter">
+                  {(
+                    [
+                      ["all", "전체"],
+                      ["todo", "미방문"],
+                      ["done", "완료"],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={savedFilter === value ? "active" : ""}
+                      onClick={() => setSavedFilter(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="trip-saved-extra">
+                  <button
+                    type="button"
+                    className={nearby ? "active" : ""}
+                    disabled={geoLoading}
+                    onClick={toggleNearby}
+                  >
+                    <MapPin size={14} />{" "}
+                    {geoLoading
+                      ? "위치 확인 중..."
+                      : nearby
+                        ? "내 주변 ON"
+                        : "내 주변 거리순"}
+                  </button>
+                  <label>
+                    길찾기
+                    <select
+                      value={routeMode}
+                      onChange={(e) =>
+                        setRouteMode(e.target.value as DirectionsMode)
+                      }
+                    >
+                      <option value="walking">도보</option>
+                      <option value="transit">대중교통</option>
+                      <option value="driving">자동차</option>
+                    </select>
+                  </label>
+                </div>
+                {geoMessage && <small role="status">{geoMessage}</small>}
+                {nearby && (
+                  <small>직선거리 순서야. 실제 도로 이동시간과는 달라.</small>
+                )}
+              </div>
+              <MapCollection
+                places={visiblePlaces}
+                visited={visited}
+                routeMode={routeMode}
+              />
 
               {/* ===== 지도에 연결된 일정 목록 ===== */}
               <div className="place-list">
-                {mapCollection.length === 0 ? (
+                {visiblePlaces.length === 0 ? (
                   <p className="map-empty">
-                    아직 등록된 위치가 없어. 일정에서 지도 위치를 선택하면
-                    자동으로 나타나.
+                    조건에 맞는 장소가 없어. 위치가 없는 일정은 내 주변 모드에서
+                    제외돼.
                   </p>
                 ) : (
-                  mapCollection.map((place) => {
+                  visiblePlaces.map((place) => {
                     // ===== 해당 장소의 Google Maps 링크 =====
                     const url = getGoogleMapsUrl(place);
 
@@ -1423,6 +1725,9 @@ function App() {
                         {/* ===== 장소명 및 여행 날짜 ===== */}
                         <div className="place-name">
                           <span>DEC {place.day} · 2026</span>
+                          {visited.includes(place.id) && (
+                            <span className="trip-visited-tag">방문 완료</span>
+                          )}
 
                           {/* ===== 장소 이름을 누르면 Google Maps 열기 ===== */}
                           <strong>
@@ -1444,17 +1749,36 @@ function App() {
                             {place.mapLocation?.address ||
                               place.detail ||
                               "지도 위치 등록됨"}
+                            {nearby && myPosition && place.mapLocation && (
+                              <span>
+                                {" "}
+                                · 직선거리{" "}
+                                {formatDistance(
+                                  distanceMeters(myPosition, place.mapLocation),
+                                )}
+                              </span>
+                            )}
                           </small>
                         </div>
 
-                        {/* ===== Google Maps에서 열기 ===== */}
-                        {url && (
+                        {/* ===== 방문 체크: 기존 Firebase 방문 상태 재사용 ===== */}
+                        <button
+                          type="button"
+                          className="trip-visit-action"
+                          aria-label={`${place.name} 방문 상태 변경`}
+                          aria-pressed={visited.includes(place.id)}
+                          onClick={() => toggleVisited(place.id)}
+                        >
+                          <Check size={17} />
+                        </button>
+                        {/* ===== 무료 Google Maps 길찾기 URL: 좌표가 있어야 정확 ===== */}
+                        {getDirectionsUrl(place, routeMode) && (
                           <a
                             className="map-collection-link"
-                            href={url}
+                            href={getDirectionsUrl(place, routeMode)!}
                             target="_blank"
                             rel="noopener noreferrer"
-                            aria-label={`${place.name} 지도 열기`}
+                            aria-label={`${place.name} 길찾기`}
                           >
                             <Navigation size={18} />
                           </a>
@@ -1521,9 +1845,7 @@ function App() {
           </>
         )}
 
-        <footer className="prototype-note">
-          DESIGN PROTOTYPE · 일정과 경비는 이 기기에 저장돼요.
-        </footer>
+        <footer className="prototype-note">질문은 뗴으니한테.</footer>
       </main>
       <nav className="bottom-nav" aria-label="메인 메뉴">
         {navItems.map((item) => {
@@ -1712,6 +2034,14 @@ function App() {
             // 다시 일정 입력창으로 돌아가기
             setShowMapPicker(false);
           }}
+        />
+      )}
+      {/* ===== 하루 전체 동선 지도 ===== */}
+      {showDayMap && (
+        <DailyRouteMap
+          day={selected.day}
+          stops={selected.stops}
+          onClose={() => setShowDayMap(false)}
         />
       )}
     </div>

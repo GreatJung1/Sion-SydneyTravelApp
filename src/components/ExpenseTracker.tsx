@@ -33,24 +33,43 @@ export type ExpenseCategory =
 
 // ===== 공동 분배 또는 개인 부담 =====
 export type ExpenseMode = "split" | "personal";
+export type ExpenseCurrency = "AUD" | "KRW";
+export type SettlementChoice = "unreviewed" | "pending" | "partial" | "complete";
+
 
 // ===== 실제 저장되는 지출 데이터 =====
 export type Expense = {
   id: string;
   title: string;
+  // ===== AUD는 센트, KRW는 원. 기존 통화 미지정 기록은 AUD =====
   amountCents: number;
+  currency?: ExpenseCurrency;
+  paymentDate?: string; // 실제 결제 날짜 YYYY-MM-DD (여행 전 예약비도 가능)
+  settlementReviewed?: boolean; // 기존 기록은 미확인으로 유지
+  settlementPaid?: Partial<Record<PersonName, number>>; // 부담자가 결제자에게 이미 송금한 금액(최소 화폐 단위)
   payer: PersonName;
   participants: PersonName[];
   category: ExpenseCategory;
   mode: ExpenseMode;
   createdAt: string;
+  stopId?: string | null; // ===== 연결된 일정 ID (선택사항) =====
 };
 
 // ===== 경비 화면 컴포넌트에 전달할 값 =====
 
+type PickerDay = {
+  day: number;
+  weekday: string;
+  title: string;
+  stops: { id: string; time: string; name: string; detail: string }[];
+};
+
 // ===== 부모 App.tsx에서 전달받는 경비 기능 =====
 type ExpenseTrackerProps = {
   expenses: Expense[];
+  itineraryDays: PickerDay[];
+  initialStopId?: string | null;
+  onInitialStopConsumed?: () => void;
 
   // ===== 신규 등록 =====
   onAddExpense: (expense: Expense) => void;
@@ -112,6 +131,70 @@ function parseAmountCents(value: string): number | null {
   return cents;
 }
 
+// ===== 원화와 호주달러는 각각의 최소 화폐 단위로 보관 =====
+function expenseCurrency(expense: Expense): ExpenseCurrency {
+  return expense.currency === "KRW" ? "KRW" : "AUD";
+}
+
+function formatMoney(amountMinor: number, currency: ExpenseCurrency): string {
+  return currency === "KRW"
+    ? `₩${amountMinor.toLocaleString("ko-KR")}`
+    : formatAud(amountMinor);
+}
+
+function parseMoneyMinor(value: string, currency: ExpenseCurrency): number | null {
+  if (currency === "KRW") {
+    const trimmed = value.trim();
+    if (!/^\d+$/.test(trimmed)) return null;
+    const won = Number(trimmed);
+    return Number.isSafeInteger(won) && won > 0 ? won : null;
+  }
+  return parseAmountCents(value);
+}
+
+function inputMoneyValue(amountMinor: number, currency: ExpenseCurrency): string {
+  return currency === "KRW" ? String(amountMinor) : (amountMinor / 100).toFixed(2);
+}
+
+function emptyPeople(): Record<PersonName, number> {
+  return { 정세은: 0, 김서영: 0, 최서은: 0 };
+}
+
+function getExpenseShares(expense: Expense): Record<PersonName, number> {
+  return allocateShares(expense.amountCents, expense.mode === "personal"
+    ? expense.participants.slice(0, 1)
+    : expense.participants);
+}
+
+function getSettlementChoice(expense: Expense): SettlementChoice | "personal" {
+  if (expense.mode === "personal" && expense.participants[0] === expense.payer) {
+    return "personal";
+  }
+  if (expense.settlementReviewed !== true) return "unreviewed";
+  const shares = getExpenseShares(expense);
+  const debtors = PEOPLE.filter(person => person !== expense.payer && shares[person] > 0);
+  if (debtors.length === 0) return "complete";
+  const paid = debtors.reduce((sum, person) => sum + Math.min(shares[person], Math.max(0, expense.settlementPaid?.[person] ?? 0)), 0);
+  const due = debtors.reduce((sum, person) => sum + shares[person], 0);
+  return paid >= due ? "complete" : paid > 0 ? "partial" : "pending";
+}
+
+function settlementLabel(choice: ReturnType<typeof getSettlementChoice>): string {
+  switch (choice) {
+    case "complete": return "정산 완료";
+    case "partial": return "부분 정산";
+    case "pending": return "정산 필요";
+    case "personal": return "개인 지출";
+    default: return "정산 확인 필요";
+  }
+}
+
+function localToday(): string {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
 // ===== N빵 금액을 센트 단위로 정확하게 배분 =====
 function allocateShares(
   amountCents: number,
@@ -151,6 +234,9 @@ type FxRate = {
 // ===== 공동 경비 메인 화면 =====
 export default function ExpenseTracker({
   expenses,
+  itineraryDays,
+  initialStopId,
+  onInitialStopConsumed,
   onAddExpense,
   onUpdateExpense,
   onDeleteExpense,
@@ -158,8 +244,17 @@ export default function ExpenseTracker({
 
   // ===== 지출 입력창 =====
   const [showModal, setShowModal] = useState(false);
+  const [linkedStopId, setLinkedStopId] = useState<string | null>(null);
+  const [showStopPicker, setShowStopPicker] = useState(false);
+  const [pickerDay, setPickerDay] = useState(16);
+  const linkedStop = itineraryDays.flatMap((d) => d.stops.map((s) => ({...s, day:d.day})))
+    .find((s) => s.id === linkedStopId);
   // ===== 최종 정산 상세창 열림 / 닫힘 =====
 const [showSettlement, setShowSettlement] = useState(false);
+
+// ===== 선택한 사람의 지출 상세 화면 =====
+const [selectedPerson, setSelectedPerson] =
+  useState<PersonName | null>(null);
 
 // ===== 현재 수정 중인 지출 =====
 const [editingExpense, setEditingExpense] =
@@ -191,12 +286,29 @@ const expenseSwipeStart = useRef<{
   const [personalOwner, setPersonalOwner] = useState<PersonName>("정세은");
 
   const [formError, setFormError] = useState("");
+  const [currency, setCurrency] = useState<ExpenseCurrency>("AUD");
+  const [paymentDate, setPaymentDate] = useState(localToday);
+  const [settlementChoice, setSettlementChoice] = useState<SettlementChoice>("pending");
+  const [settlementInputs, setSettlementInputs] = useState<Partial<Record<PersonName, string>>>({});
+  const [expenseFilter, setExpenseFilter] = useState<"all" | "unsettled" | "complete" | "unreviewed">("all");
 
   // ===== AUD → KRW 환율 =====
   const [fx, setFx] = useState<FxRate | null>(null);
   const [fxStatus, setFxStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
+
+  // ===== 일정 카드의 '경비 추가'에서 진입하면 연결된 지출 창 자동 열기 =====
+  useEffect(() => {
+    if (!initialStopId) return;
+    resetForm();
+    setLinkedStopId(initialStopId);
+    setEditingExpense(null);
+    setShowStopPicker(false);
+    setShowModal(true);
+    onInitialStopConsumed?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialStopId]);
 
   // ===== 최신 발표 기준환율 불러오기 =====
   useEffect(() => {
@@ -247,113 +359,95 @@ const expenseSwipeStart = useRef<{
     return () => controller.abort();
   }, []);
 
-  // ===== 전체 지출 합계 =====
-  const totalCents = useMemo(
-    () => expenses.reduce((sum, expense) => sum + expense.amountCents, 0),
-    [expenses],
-  );
-
-  // ===== 개인별 실제 결제액 / 최종 부담액 계산 =====
-  const personTotals = useMemo(() => {
-    const paid: Record<PersonName, number> = {
-      정세은: 0,
-      김서영: 0,
-      최서은: 0,
-    };
-
-    const owed: Record<PersonName, number> = {
-      정세은: 0,
-      김서영: 0,
-      최서은: 0,
-    };
+  // ===== 통화별 합계 / 결제액 / 부담액 / 이미 송금한 금액 반영 =====
+  // 정산 확인을 하지 않은 과거 기록은 전체 지출에는 포함하되 송금 추천에서 제외한다.
+  const moneySummary = useMemo(() => {
+    const totals = { AUD: 0, KRW: 0 };
+    const paid = { AUD: emptyPeople(), KRW: emptyPeople() };
+    const owed = { AUD: emptyPeople(), KRW: emptyPeople() };
+    const balances = { AUD: emptyPeople(), KRW: emptyPeople() };
+    let unreviewedCount = 0;
 
     for (const expense of expenses) {
-      // ===== 실제 돈을 낸 사람에게 결제액 합산 =====
-      paid[expense.payer] += expense.amountCents;
-
-      // ===== 개인이면 한 명, N빵이면 선택한 사람들 =====
-      const selectedPeople =
-        expense.mode === "personal"
-          ? expense.participants.slice(0, 1)
-          : expense.participants;
-
-      const shares = allocateShares(expense.amountCents, selectedPeople);
-
-      // ===== 각 사람의 부담액 합산 =====
-      PEOPLE.forEach((person) => {
-        owed[person] += shares[person];
+      const unit = expenseCurrency(expense);
+      const shares = getExpenseShares(expense);
+      totals[unit] += expense.amountCents;
+      paid[unit][expense.payer] += expense.amountCents;
+      PEOPLE.forEach(person => { owed[unit][person] += shares[person]; });
+      // 기존 저장 기록의 정산 여부는 추측하지 않는다.
+      if (expense.settlementReviewed !== true) {
+        if (getSettlementChoice(expense) !== "personal") unreviewedCount++;
+        continue;
+      }
+      balances[unit][expense.payer] += expense.amountCents;
+      PEOPLE.forEach(person => { balances[unit][person] -= shares[person]; });
+      // 이미 돈을 보낸 기록은 채무/채권 양쪽에서 정확히 차감한다.
+      PEOPLE.forEach(person => {
+        if (person === expense.payer || shares[person] === 0) return;
+        const reported = expense.settlementPaid?.[person] ?? 0;
+        const transferred = Number.isSafeInteger(reported) ? Math.min(shares[person], Math.max(0, reported)) : 0;
+        balances[unit][person] += transferred;
+        balances[unit][expense.payer] -= transferred;
       });
     }
-
-    return { paid, owed };
+    return { totals, paid, owed, balances, unreviewedCount };
   }, [expenses]);
 
-  // ===== 최종 송금 내역 타입 =====
+
+  // ===== 전체 지출: AUD와 KRW를 환율로 환산해 합산 =====
+  // AUD는 센트, KRW는 원 단위로 저장되어 있음.
+
+  const totalCombinedKrw =
+    fx && fx.rate > 0
+      ? moneySummary.totals.KRW +
+        Math.round((moneySummary.totals.AUD / 100) * fx.rate)
+      : null;
+
+  // ===== 합산한 원화 총액을 AUD로 환산 =====
+  const totalCombinedAudCents =
+    totalCombinedKrw !== null && fx
+      ? Math.round((totalCombinedKrw / fx.rate) * 100)
+      : null;
+
+
+
   type SettlementTransfer = {
     from: PersonName;
     to: PersonName;
-    amountCents: number;
+    amountMinor: number;
+    currency: ExpenseCurrency;
   };
 
-  // ===== 모든 지출을 합산해 최종 정산 계산 =====
+  // ===== AUD / KRW 독립적으로 채권·채무 상계 (환율 합산 금지) =====
   const settlements = useMemo<SettlementTransfer[]>(() => {
-    // ===== 실제 결제액 - 본인 부담액 =====
-    const balances = PEOPLE.map((person) => ({
-      person,
-      balance: personTotals.paid[person] - personTotals.owed[person],
-    }));
-
-    // ===== 돈을 받아야 하는 사람 =====
-    const creditors = balances
-      .filter((item) => item.balance > 0)
-      .map((item) => ({
-        person: item.person,
-        amount: item.balance,
-      }))
-      .sort((a, b) => b.amount - a.amount);
-
-    // ===== 돈을 보내야 하는 사람 =====
-    const debtors = balances
-      .filter((item) => item.balance < 0)
-      .map((item) => ({
-        person: item.person,
-        amount: -item.balance,
-      }))
-      .sort((a, b) => b.amount - a.amount);
-
-    const transfers: SettlementTransfer[] = [];
-
-    let i = 0;
-    let j = 0;
-
-    // ===== 채무자와 채권자의 금액을 순서대로 상계 =====
-    while (i < debtors.length && j < creditors.length) {
-      const debtor = debtors[i];
-      const creditor = creditors[j];
-
-      const amount = Math.min(debtor.amount, creditor.amount);
-
-      // ===== 실제 필요한 송금 내역 생성 =====
-      if (amount > 0) {
-        transfers.push({
-          from: debtor.person,
-          to: creditor.person,
-          amountCents: amount,
-        });
+    const result: SettlementTransfer[] = [];
+    for (const unit of ["AUD", "KRW"] as const) {
+      const balances = PEOPLE.map(person => ({ person, amount: moneySummary.balances[unit][person] }));
+      const creditors = balances.filter(p => p.amount > 0).sort((a,b) => b.amount-a.amount).map(p=>({...p}));
+      const debtors = balances.filter(p => p.amount < 0).map(p=>({person:p.person, amount:-p.amount})).sort((a,b) => b.amount-a.amount);
+      let i=0, j=0;
+      while (i<debtors.length && j<creditors.length) {
+        const amount = Math.min(debtors[i].amount, creditors[j].amount);
+        if (amount > 0) result.push({from:debtors[i].person, to:creditors[j].person, amountMinor:amount, currency:unit});
+        debtors[i].amount -= amount;
+        creditors[j].amount -= amount;
+        if (debtors[i].amount === 0) i++;
+        if (creditors[j].amount === 0) j++;
       }
-
-      debtor.amount -= amount;
-      creditor.amount -= amount;
-
-      if (debtor.amount === 0) i++;
-      if (creditor.amount === 0) j++;
     }
+    return result;
+  }, [moneySummary]);
 
-    return transfers;
-  }, [personTotals]);
+  const visibleExpenses = useMemo(() => expenses.filter(expense => {
+    const status = getSettlementChoice(expense);
+    if (expenseFilter === "all") return true;
+    if (expenseFilter === "unsettled") return status === "pending" || status === "partial";
+    if (expenseFilter === "complete") return status === "complete" || status === "personal";
+    return status === "unreviewed";
+  }), [expenses, expenseFilter]);
 
   // ===== 입력 중인 금액 및 분배 미리보기 =====
-  const previewCents = parseAmountCents(amount) ?? 0;
+  const previewCents = parseMoneyMinor(amount, currency) ?? 0;
 
   const selectedPeople =
     mode === "personal"
@@ -372,6 +466,12 @@ const expenseSwipeStart = useRef<{
     setParticipants([...PEOPLE]);
     setPersonalOwner("정세은");
     setFormError("");
+    setCurrency("AUD");
+    setPaymentDate(localToday());
+    setSettlementChoice("pending");
+    setSettlementInputs({});
+    setLinkedStopId(null);
+    setShowStopPicker(false);
   }
 
   // ===== 새 지출 입력 시작 =====
@@ -388,10 +488,19 @@ function openAddModal() {
 function openEditModal(expense: Expense) {
   // ===== 수정할 기록 보관 =====
   setEditingExpense(expense);
+  setLinkedStopId(expense.stopId ?? null);
 
   // ===== 기존 입력값 모두 복원 =====
   setTitle(expense.title);
-  setAmount((expense.amountCents / 100).toFixed(2));
+  const unit = expenseCurrency(expense);
+  setCurrency(unit);
+  setAmount(inputMoneyValue(expense.amountCents, unit));
+  setPaymentDate(expense.paymentDate ?? "");
+  const status = getSettlementChoice(expense);
+  setSettlementChoice(status === "personal" ? "complete" : status);
+  setSettlementInputs(Object.fromEntries(PEOPLE.map(person => [
+    person, inputMoneyValue(expense.settlementPaid?.[person] ?? 0, unit)
+  ])) as Partial<Record<PersonName, string>>);
   setCategory(expense.category);
   setPayer(expense.payer);
   setMode(expense.mode);
@@ -427,8 +536,8 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
   event.preventDefault();
   setFormError("");
 
-  // ===== 금액을 AUD 센트 단위로 변환 =====
-  const cents = parseAmountCents(amount);
+  // ===== 각 통화의 최소 화폐 단위로 변환 (AUD 센트 / KRW 원) =====
+  const cents = parseMoneyMinor(amount, currency);
 
   if (!title.trim()) {
     setFormError("사용 내역을 입력해 줘.");
@@ -436,7 +545,7 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
   }
 
   if (cents === null) {
-    setFormError("금액은 소수점 둘째 자리까지 입력해 줘.");
+    setFormError(currency === "KRW" ? "원화는 정수 금액으로 입력해 줘." : "호주달러는 소수점 둘째 자리까지 입력해 줘.");
     return;
   }
 
@@ -457,14 +566,40 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
     return;
   }
 
+  // ===== 이미 완료된 송금과 아직 남은 송금을 구분 =====
+  const shares = allocateShares(cents, finalParticipants);
+  const settlementPaid: Partial<Record<PersonName, number>> = {};
+  if (settlementChoice === "complete") {
+    PEOPLE.forEach(person => {
+      if (person !== payer && shares[person] > 0) settlementPaid[person] = shares[person];
+    });
+  } else if (settlementChoice === "partial") {
+    for (const person of PEOPLE) {
+      if (person === payer || shares[person] === 0) continue;
+      const raw = (settlementInputs[person] ?? "").trim();
+      // 부분 정산: 각 사람이 실제 송금한 금액만 입력
+      const value = raw === "" || raw === "0" || raw === "0.00" ? 0 : parseMoneyMinor(raw, currency);
+      if (value === null || value > shares[person]) {
+        setFormError(`${person} 송금액이 잘못됐어. 해당 인원의 부담액 이내로 입력해 줘.`);
+        return;
+      }
+      if (value > 0) settlementPaid[person] = value;
+    }
+  }
+
   // ===== 새 등록과 수정에서 공통으로 사용할 데이터 =====
   const values = {
+    currency,
+    paymentDate: paymentDate || undefined,
+    settlementReviewed: settlementChoice !== "unreviewed",
+    settlementPaid,
     title: title.trim(),
     amountCents: cents,
     category,
     payer,
     mode,
     participants: finalParticipants,
+    stopId: linkedStopId,
   };
 
   if (editingExpense) {
@@ -515,40 +650,95 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
         </p>
       </div>
 
-      {/* ===== 크기를 줄인 전체 지출 카드 ===== */}
+      
+      {/* ===== 전체 여행 지출: 통합 합계 + 통화별 내역 ===== */}
       <section className="exp-total">
-        <span>전체 지출 · AUD</span>
 
-        <strong>{formatAud(totalCents)}</strong>
+        <span>전체 여행 지출</span>
 
-        {fx && <small>{formatKrw(totalCents, fx.rate)}</small>}
+        {/* ===== 메인: 전체 금액을 AUD로 환산 ===== */}
+        <strong>
+          {totalCombinedAudCents !== null
+            ? formatAud(totalCombinedAudCents)
+            : fxStatus === "error"
+              ? "환율 조회 실패"
+              : "환율 계산 중..."}
+        </strong>
+
+        {/* ===== 작은 글씨: 전체 금액을 KRW로 환산 ===== */}
+        <strong className="exp-total-krw">
+          {totalCombinedKrw !== null
+            ? `약 ${formatMoney(totalCombinedKrw, "KRW")}`
+            : "원화 합계 계산 대기"}
+        </strong>
+
+        {/* ===== 실제로 결제한 통화별 금액 ===== */}
+        <small className="exp-total-breakdown">
+          <span>
+            AUD 지출 · {formatAud(moneySummary.totals.AUD)}
+          </span>
+
+          <span>
+            KRW 지출 · {formatMoney(
+              moneySummary.totals.KRW,
+              "KRW"
+            )}
+          </span>
+        </small>
+
       </section>
 
-      {/* ===== 개인별 부담액 카드 ===== */}
+      {/* ===== 개인별 소비 총액 카드 ===== */}
       <section className="exp-section">
         <div className="exp-people-grid">
           {PEOPLE.map((person) => {
-            const owed = personTotals.owed[person];
-            const paid = personTotals.paid[person];
+            // ===== 본인이 부담할 AUD / KRW 원금액 =====
+            const owedAud = moneySummary.owed.AUD[person];
+            const owedKrw = moneySummary.owed.KRW[person];
+
+            // ===== 환율을 이용한 통합 소비 총액 =====
+            const totalAud = fx
+              ? Math.round(owedAud + (owedKrw / fx.rate) * 100)
+              : null;
+
+            const totalKrw = fx
+              ? Math.round(owedKrw + (owedAud / 100) * fx.rate)
+              : null;
 
             return (
-              <article className="exp-person-card" key={person}>
-                <span className="exp-person-name">{person}</span>
+              <button
+                type="button"
+                key={person}
+                className="exp-person-card exp-person-card-button"
+                onClick={() => setSelectedPerson(person)}
+                aria-label={`${person} 지출 상세 보기`}
+              >
+                <span className="exp-person-name">
+                  {person}
+                </span>
 
-                {/* ===== 본인이 부담할 금액 ===== */}
-                <strong>{formatAud(owed)}</strong>
+                {/* ===== AUD로 환산한 전체 소비 ===== */}
+                <strong>
+                  {totalAud !== null
+                    ? formatAud(totalAud)
+                    : "합산 대기"}
+                </strong>
 
-                {/* ===== 원화 참고 환산 ===== */}
-                {fx && (
-                  <small className="exp-won">{formatKrw(owed, fx.rate)}</small>
-                )}
+                {/* ===== 아래 작게 원화 환산 총액 ===== */}
+                <small className="exp-won">
+                  {totalKrw !== null
+                    ? `약 ${formatMoney(totalKrw, "KRW")}`
+                    : `${formatAud(owedAud)} + ${formatMoney(owedKrw, "KRW")}`}
+                </small>
 
-                {/* ===== 실제 카드나 현금으로 낸 금액 ===== */}
-                <span className="exp-person-paid">결제 {formatAud(paid)}</span>
-              </article>
+                <span className="exp-person-card-hint">
+                  내역 보기 ›
+                </span>
+              </button>
             );
           })}
         </div>
+ 
 
 {/* ===== 개인별 카드 아래의 작은 정산 버튼 ===== */}
 <div className="exp-settlement-link-line">
@@ -566,6 +756,296 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
       </section>
 
 {/* ===== 세 사람의 최종 송금 정산 ===== */}
+
+{/* ===== 개인별 소비 상세 화면 ===== */}
+{selectedPerson && (() => {
+  // ===== 각 지출에서 선택한 사람이 부담하는 금액 =====
+  const rows = expenses.map((expense) => ({
+    expense,
+    currency: expenseCurrency(expense),
+    share: getExpenseShares(expense)[selectedPerson],
+  }));
+
+  // ===== 공동 비용 / 개인 소비 분리 =====
+  const groups = [
+    {
+      key: "split",
+      title: "N빵 소비",
+      description: "N빵 비용 중 내가 부담하는 금액",
+      items: rows.filter(
+        (row) =>
+          row.expense.mode === "split" &&
+          row.share > 0
+      ),
+    },
+    {
+      key: "personal",
+      title: "개인 소비",
+      description: "나혼자 소비한 것들",
+      items: rows.filter(
+        (row) =>
+          row.expense.mode === "personal" &&
+          row.share > 0
+      ),
+    },
+  ] as const;
+
+  // ===== 직접 결제한 지출 =====
+  const paidItems = rows.filter(
+    (row) => row.expense.payer === selectedPerson
+  );
+
+  // ===== 본인 총 소비액 =====
+  const owedAud = moneySummary.owed.AUD[selectedPerson];
+  const owedKrw = moneySummary.owed.KRW[selectedPerson];
+
+  // ===== AUD / KRW 합산 환산 =====
+  const combinedKrw = fx
+    ? owedKrw + Math.round((owedAud / 100) * fx.rate)
+    : null;
+
+  const combinedAud = fx
+    ? owedAud + Math.round((owedKrw / fx.rate) * 100)
+    : null;
+
+  return (
+    <div
+      className="exp-modal-backdrop"
+      onClick={() => setSelectedPerson(null)}
+    >
+      <section
+        className="exp-modal exp-person-detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exp-person-detail-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {/* ===== 상단 이름과 닫기 버튼 ===== */}
+        <div className="exp-modal-header">
+          <h2 id="exp-person-detail-title">
+            {selectedPerson} · 소비 내역
+          </h2>
+
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={() => setSelectedPerson(null)}
+          >
+            <X size={21} />
+          </button>
+        </div>
+
+        {/* ===== 1. 본인 전체 소비 금액 ===== */}
+        <div className="exp-person-spending-total">
+          <small>나의 전체 소비</small>
+
+          <strong>
+            {combinedAud === null
+              ? "환율 조회 후 합산"
+              : formatAud(combinedAud)}
+          </strong>
+
+          <span>
+            {combinedKrw === null
+              ? "원화 합산 대기"
+              : `약 ${formatMoney(combinedKrw, "KRW")}`}
+          </span>
+
+          {/* ===== 실제 결제 통화별 소비 ===== */}
+          <div className="exp-person-original-amounts">
+            <span>
+              실제 AUD 소비 · {formatAud(owedAud)}
+            </span>
+
+            <span>
+              실제 KRW 소비 · {formatMoney(owedKrw, "KRW")}
+            </span>
+          </div>
+        </div>
+
+        {/* ===== 2. 공동 비용과 개인 소비 구분 ===== */}
+        {groups.map((group) => {
+          // ===== 해당 그룹의 AUD 소비 합계 =====
+          const aud = group.items.reduce(
+            (sum, row) =>
+              sum +
+              (row.currency === "AUD" ? row.share : 0),
+            0
+          );
+
+          // ===== 해당 그룹의 KRW 소비 합계 =====
+          const krw = group.items.reduce(
+            (sum, row) =>
+              sum +
+              (row.currency === "KRW" ? row.share : 0),
+            0
+          );
+
+          return (
+            <section
+              className="exp-person-spending-group"
+              key={group.key}
+            >
+              {/* ===== 그룹 제목과 합계 ===== */}
+              <div className="exp-person-spending-group-head">
+                <div>
+                  <h3>{group.title}</h3>
+                  <small>{group.description}</small>
+                </div>
+
+                <div className="exp-person-group-totals">
+                  {aud > 0 && (
+                    <strong>{formatAud(aud)}</strong>
+                  )}
+
+                  {krw > 0 && (
+                    <strong>
+                      {formatMoney(krw, "KRW")}
+                    </strong>
+                  )}
+
+                  {aud === 0 && krw === 0 && (
+                    <strong>내역 없음</strong>
+                  )}
+                </div>
+              </div>
+
+              {/* ===== 그룹별 지출 내역 ===== */}
+              {group.items.length === 0 ? (
+                <p className="exp-person-spending-empty">
+                  등록된 내역이 없어.
+                </p>
+              ) : (
+                <div className="exp-person-detail-list">
+                  {group.items.map(
+                    ({ expense, currency, share }) => (
+                      <div
+                        className="exp-person-spending-row"
+                        key={expense.id}
+                      >
+                        <div className="exp-person-spending-row-main">
+                          <strong>{expense.title}</strong>
+
+                          {/* ===== 내가 실제 부담하는 금액 ===== */}
+                          <b>
+                            {formatMoney(share, currency)}
+                          </b>
+                        </div>
+
+                        <small>
+                          {CATEGORY_LABELS[expense.category]}
+
+                          {expense.paymentDate
+                            ? ` · ${expense.paymentDate}`
+                            : ""}
+
+                          {` · 결제 ${expense.payer}`}
+                        </small>
+
+                        {/* ===== N빵이면 원래 전체 금액 표시 ===== */}
+                        {expense.mode === "split" && (
+                          <small>
+                            전체 지출{" "}
+                            {formatMoney(
+                              expense.amountCents,
+                              currency
+                            )}
+                          </small>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+            </section>
+          );
+        })}
+
+        {/* ===== 3. 내가 직접 결제한 내역 ===== */}
+        <details className="exp-person-payment-details">
+          <summary>
+            <span>내가 직접 결제한 내역</span>
+
+            <span className="exp-person-payment-summary-amounts">
+              {moneySummary.paid.AUD[selectedPerson] > 0 && (
+                <b>
+                  {formatAud(
+                    moneySummary.paid.AUD[selectedPerson]
+                  )}
+                </b>
+              )}
+
+              {moneySummary.paid.KRW[selectedPerson] > 0 && (
+                <b>
+                  {formatMoney(
+                    moneySummary.paid.KRW[selectedPerson],
+                    "KRW"
+                  )}
+                </b>
+              )}
+
+              {paidItems.length === 0 && (
+                <b>내역 없음</b>
+              )}
+            </span>
+          </summary>
+
+          <p className="exp-person-detail-note">
+            직접 결제한 목록들이고 개인 결제랑 N빵 리스트도 포함되어있어.
+          </p>
+
+          {/* ===== 직접 결제 목록 ===== */}
+          {paidItems.length === 0 ? (
+            <p className="exp-person-spending-empty">
+              직접 결제한 기록이 없어.
+            </p>
+          ) : (
+            <div className="exp-person-detail-list">
+              {paidItems.map(({ expense, currency }) => (
+                <div
+                  className="exp-person-spending-row"
+                  key={expense.id}
+                >
+                  <div className="exp-person-spending-row-main">
+                    <strong>{expense.title}</strong>
+
+                    <b>
+                      {formatMoney(
+                        expense.amountCents,
+                        currency
+                      )}
+                    </b>
+                  </div>
+
+                  <small>
+                    {CATEGORY_LABELS[expense.category]}
+                    {" · "}
+                    {expense.mode === "split"
+                      ? "공동 결제"
+                      : "개인 결제"}
+
+                    {expense.paymentDate
+                      ? ` · ${expense.paymentDate}`
+                      : ""}
+                  </small>
+                </div>
+              ))}
+            </div>
+          )}
+        </details>
+
+        {/* ===== 하단 닫기 버튼 ===== */}
+        <button
+          type="button"
+          className="exp-save-button"
+          onClick={() => setSelectedPerson(null)}
+        >
+          닫기
+        </button>
+      </section>
+    </div>
+  );
+})()}
 
 {/* ===== 최종 정산 버튼을 누를 때만 표시되는 창 ===== */}
 {showSettlement && (
@@ -594,40 +1074,32 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
       </div>
 
       <p className="exp-settlement-description">
-        모든 지출을 합산한 최종 정산 결과야.
+        정산 상태를 확인한 경비만 계산했어. 이미 송금한 돈은 제외했고 AUD와 KRW는 따로 계산해.
       </p>
 
       {/* ===== 사람별 결제액과 부담액 정리 ===== */}
       <div className="exp-settlement-summary">
-        {PEOPLE.map((person) => {
-          // ===== 실제 결제액에서 부담액 차감 =====
-          const balance =
-            personTotals.paid[person] -
-            personTotals.owed[person];
-
-          return (
-            <div className="exp-settlement-person" key={person}>
-              <div>
-                <strong>{person}</strong>
-                <small>
-                  결제 {formatAud(personTotals.paid[person])}
-                  {" · "}
-                  부담 {formatAud(personTotals.owed[person])}
-                </small>
-              </div>
-
-              {/* ===== 양수는 받을 돈, 음수는 보낼 돈 ===== */}
-              <span>
-                {balance > 0
-                  ? `받을 돈 ${formatAud(balance)}`
-                  : balance < 0
-                    ? `보낼 돈 ${formatAud(-balance)}`
-                    : "정산 없음"}
-              </span>
+        {PEOPLE.map((person) => (
+          <div className="exp-settlement-person" key={person}>
+            <div>
+              <strong>{person}</strong>
+              <small>결제 {formatAud(moneySummary.paid.AUD[person])} · 부담 {formatAud(moneySummary.owed.AUD[person])}</small>
+              <small>결제 {formatMoney(moneySummary.paid.KRW[person], "KRW")} · 부담 {formatMoney(moneySummary.owed.KRW[person], "KRW")}</small>
             </div>
-          );
-        })}
+            <span>
+              {moneySummary.balances.AUD[person] > 0 ? "AUD 받을 돈 " : moneySummary.balances.AUD[person] < 0 ? "AUD 보낼 돈 " : "AUD 정산 없음"}
+              {moneySummary.balances.AUD[person] !== 0 && formatMoney(Math.abs(moneySummary.balances.AUD[person]), "AUD")}
+              <br />
+              {moneySummary.balances.KRW[person] > 0 ? "KRW 받을 돈 " : moneySummary.balances.KRW[person] < 0 ? "KRW 보낼 돈 " : "KRW 정산 없음"}
+              {moneySummary.balances.KRW[person] !== 0 && formatMoney(Math.abs(moneySummary.balances.KRW[person]), "KRW")}
+            </span>
+          </div>
+        ))}
       </div>
+
+      {moneySummary.unreviewedCount > 0 && (
+        <p className="exp-form-error">정산 여부를 확인하지 않은 기존 경비 {moneySummary.unreviewedCount}건은 송금 계산에서 제외했어. 지출 내역에서 수정해 상태를 지정해 줘.</p>
+      )}
 
       {/* ===== 실제 송금 안내 ===== */}
       <h3 className="exp-settlement-subtitle">
@@ -645,7 +1117,7 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
           settlements.map((transfer) => (
             <div
               className="exp-settlement-row"
-              key={`${transfer.from}-${transfer.to}`}
+              key={`${transfer.currency}-${transfer.from}-${transfer.to}`}
             >
               {/* ===== 보내는 사람과 받는 사람 ===== */}
               <div className="exp-settlement-people">
@@ -657,13 +1129,11 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
               {/* ===== AUD 및 참고용 원화 금액 ===== */}
               <div className="exp-settlement-amount">
                 <strong>
-                  {formatAud(transfer.amountCents)}
+                  {formatMoney(transfer.amountMinor, transfer.currency)}
                 </strong>
 
-                {fx && (
-                  <small>
-                    {formatKrw(transfer.amountCents, fx.rate)}
-                  </small>
+                {fx && transfer.currency === "AUD" && (
+                  <small>{formatKrw(transfer.amountMinor, fx.rate)}</small>
                 )}
               </div>
             </div>
@@ -698,6 +1168,17 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
           </button>
         </div>
 
+        {/* ===== 정산 상태별 필터: 목록만 바꾸며 총경비는 유지 ===== */}
+        <div className="exp-status-filters">
+          {([
+            ["all", "전체"], ["unsettled", "정산 필요"],
+            ["complete", "정산 완료"], ["unreviewed", "확인 필요"],
+          ] as const).map(([value, label]) => (
+            <button key={value} type="button"
+              className={expenseFilter === value ? "active" : ""}
+              onClick={() => setExpenseFilter(value)}>{label}</button>
+          ))}
+        </div>
         {/* ===== 기록이 없는 경우 ===== */}
         {expenses.length === 0 ? (
           <div className="exp-empty">
@@ -705,12 +1186,13 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
             <br />
             추가 버튼으로 첫 지출을 등록해.
           </div>
+        ) : visibleExpenses.length === 0 ? (
+          <div className="exp-empty">조건에 맞는 지출이 없어.</div>
         ) : (
-          
 
 <div className="exp-list">
     {/* ===== 왼쪽 스와이프로 수정·삭제하는 경비 목록 ===== */}
-  {expenses.map((expense) => (
+  {visibleExpenses.map((expense) => (
     <div
       key={expense.id}
       className="exp-swipe"
@@ -822,12 +1304,21 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
             <span className="exp-item-category">
               {CATEGORY_LABELS[expense.category]}
               {" · "}
-              {expense.mode === "split" ? "N빵" : "개인"}
-            </span>
+                {expense.mode === "split" ? "N빵" : "개인"}
+                {" · "}
+                <button type="button" className={`exp-status-tag is-${getSettlementChoice(expense)}`}
+                  title="눌러서 정산 상태 수정" onClick={() => openEditModal(expense)}>
+                  {settlementLabel(getSettlementChoice(expense))}
+                </button>
+              </span>
 
             <strong>{expense.title}</strong>
 
-            <small>결제 {expense.payer}</small>
+              <small>결제 {expense.payer}{expense.paymentDate ? ` · ${expense.paymentDate}` : ""}{expense.paymentDate && expense.paymentDate < "2026-12-15" ? " · 사전 결제" : ""}</small>
+            {expense.stopId && (
+              <small>일정 · {itineraryDays.flatMap((d) => d.stops.map((s) => ({...s,day:d.day})))
+                .find((s) => s.id === expense.stopId)?.name ?? '삭제된 일정'}</small>
+            )}
 
             <small>
               참여 {expense.participants.join(", ")}
@@ -837,17 +1328,12 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
           {/* ===== 금액과 원화 환산액 ===== */}
           <div className="exp-item-right">
             <strong>
-              {formatAud(expense.amountCents)}
+                {formatMoney(expense.amountCents, expenseCurrency(expense))}
             </strong>
 
-            {fx && (
-              <small className="exp-won">
-                {formatKrw(
-                  expense.amountCents,
-                  fx.rate
-                )}
-              </small>
-            )}
+              {fx && expenseCurrency(expense) === "AUD" && (
+                <small className="exp-won">{formatKrw(expense.amountCents, fx.rate)}</small>
+              )}
           </div>
         </div>
       </div>
@@ -859,10 +1345,6 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
       </section>
 
       {/* ===== 환율 사용 방식 설명 ===== */}
-      <p className="exp-exchange-note">
-        원화는 조회된 기준환율에 따른 참고 금액이야. 실제 카드 청구액과 다를 수
-        있어.
-      </p>
 
       {/* ===== 지출 추가 모달 ===== */}
       {showModal && (
@@ -895,6 +1377,7 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
               <label className="exp-field">
                 사용 내역
                 <input
+                  autoFocus
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder="예: 브런치, 카페, 택시"
@@ -904,11 +1387,11 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
 
               {/* ===== 금액 ===== */}
               <label className="exp-field">
-                금액 (AUD)
+                금액 ({currency})
                 <input
                   type="number"
-                  min="0.01"
-                  step="0.01"
+                  min={currency === "KRW" ? "1" : "0.01"}
+                  step={currency === "KRW" ? "1" : "0.01"}
                   inputMode="decimal"
                   value={amount}
                   onChange={(event) => setAmount(event.target.value)}
@@ -916,6 +1399,20 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
                   required
                 />
               </label>
+
+              {/* ===== 통화와 실제 결제 날짜 ===== */}
+              <div className="exp-field-grid">
+                <label className="exp-field">통화
+                  <select value={currency} onChange={e => {setCurrency(e.target.value as ExpenseCurrency); setAmount(""); setSettlementInputs({});}}>
+                    <option value="AUD">AUD · 호주달러</option>
+                    <option value="KRW">KRW · 원화</option>
+                  </select>
+                </label>
+                <label className="exp-field">결제 날짜
+                  <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} />
+                </label>
+              </div>
+              <p className="exp-field-help">실제 결제일을 알면 입력해. 예전 기록은 날짜가 비어 있어도 돼. 통화를 변경하면 금액 입력은 초기화돼.</p>
 
               {/* ===== 카테고리와 결제자 ===== */}
               <div className="exp-field-grid">
@@ -951,6 +1448,27 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
                     ))}
                   </select>
                 </label>
+              </div>
+
+              {/* ===== 선택사항: 일정 선택 화면을 별도 열어 연결 ===== */}
+              <div className="trip-exp-link">
+                <div className="trip-exp-link-heading">
+                  <strong>일정 연결</strong><small>선택사항</small>
+                </div>
+                {linkedStopId && (
+                  <div className="trip-exp-chosen">
+                    <span>{linkedStop ? `12월 ${linkedStop.day}일 · ${linkedStop.time} ${linkedStop.name}` : '연결된 일정이 삭제됨'}</span>
+                    <button type="button" onClick={() => setLinkedStopId(null)}>해제</button>
+                  </div>
+                )}
+                <button type="button" className="trip-exp-picker-button"
+                  onClick={() => {
+                    const linkedDay = itineraryDays.find((d) => d.stops.some((s) => s.id === linkedStopId));
+                    setPickerDay(linkedDay?.day ?? 16);
+                    setShowStopPicker(true);
+                  }}>
+                  {linkedStopId ? '다른 일정 선택하기' : '일정과 연결하기'}
+                </button>
               </div>
 
               {/* ===== N빵 / 개인 지출 선택 ===== */}
@@ -1028,14 +1546,43 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
                 </label>
               )}
 
+              {/* ===== 송금 여부: 이미 보낸 금액은 최종 정산에서 빼기 ===== */}
+              <div className="exp-split-section">
+                <span className="exp-field-title">친구끼리 정산한 상태</span>
+                <label className="exp-field">
+                  <select value={settlementChoice} onChange={e => setSettlementChoice(e.target.value as SettlementChoice)}>
+                    {editingExpense && <option value="unreviewed">아직 확인하지 않음</option>}
+                    <option value="pending">정산 필요 · 아직 안 보냄</option>
+                    <option value="complete">정산 완료 · 전부 받음</option>
+                    <option value="partial">부분 정산 · 일부만 받음</option>
+                  </select>
+                </label>
+                {settlementChoice === "complete" && <p className="exp-field-help">결제자에게 각 부담자의 몫이 모두 송금된 것으로 기록돼.</p>}
+                {settlementChoice === "partial" && (
+                  <div className="exp-settlement-inputs">
+                    <p className="exp-field-help">결제자 {payer}에게 송금한 금액을 입력해.</p>
+                    {PEOPLE.filter(person => person !== payer && previewShares[person] > 0).map(person => (
+                      <label className="exp-field" key={person}>{person} · 송금 금액 {formatMoney(previewShares[person],currency)}
+                        <input type="number" inputMode="decimal" min="0"
+                          max={inputMoneyValue(previewShares[person],currency)}
+                          step={currency === "KRW" ? "1" : "0.01"}
+                          value={settlementInputs[person] ?? ""}
+                          onChange={e=>setSettlementInputs(prev=>({...prev,[person]:e.target.value}))}
+                          placeholder="이미 송금한 금액" />
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* ===== 개인별 분담 금액 미리보기 ===== */}
               <div className="exp-preview">
-                <strong>분담 금액 미리보기</strong>
+                <strong>인당 금액 미리보기</strong>
 
                 {PEOPLE.map((person) => (
                   <div className="exp-preview-row" key={person}>
                     <span>{person}</span>
-                    <b>{formatAud(previewShares[person])}</b>
+                    <b>{formatMoney(previewShares[person], currency)}</b>
                   </div>
                 ))}
               </div>
@@ -1057,6 +1604,46 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
 
             </form>
           </section>
+        </div>
+      )}
+
+      {/* ===== 기존 일정 화면과 같은 날짜 칩·일정 카드 구성의 전체 화면 선택창 ===== */}
+      {showStopPicker && (
+        <div className="trip-exp-picker-overlay" role="dialog" aria-modal="true" aria-label="연결할 일정 선택">
+          <div className="trip-exp-picker-page">
+            <div className="trip-exp-picker-head">
+              <div><span>SELECT AN ITINERARY</span><h2>일정 선택</h2></div>
+              <button type="button" onClick={() => setShowStopPicker(false)} aria-label="돌아가기">✕</button>
+            </div>
+            <div className="date-strip" aria-label="날짜 선택">
+              {itineraryDays.map((d) => (
+                <button type="button" key={d.day}
+                  className={`date-chip ${pickerDay === d.day ? 'active' : ''}`}
+                  onClick={() => setPickerDay(d.day)}>
+                  <span>{d.weekday}</span><strong>{d.day}</strong>
+                </button>
+              ))}
+            </div>
+            <div className="day-summary detail">
+              <div><span>DEC {pickerDay} · 2026</span>
+                <h3>{itineraryDays.find((d) => d.day === pickerDay)?.title}</h3>
+                <p>연결할 장소를 눌러줘.</p>
+              </div>
+            </div>
+            <div className="trip-exp-picker-list">
+              {(itineraryDays.find((d) => d.day === pickerDay)?.stops ?? []).map((s) => (
+                <button key={s.id} type="button" className="trip-exp-picker-stop"
+                  onClick={() => {setLinkedStopId(s.id); setShowStopPicker(false);}}>
+                  <span className="trip-exp-picker-time">{s.time}</span>
+                  <span className="trip-exp-picker-desc"><strong>{s.name}</strong><small>{s.detail}</small></span>
+                  <span aria-hidden="true">›</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" className="trip-exp-picker-back" onClick={() => setShowStopPicker(false)}>
+              경비 입력으로 돌아가기
+            </button>
+          </div>
         </div>
       )}
     </div>

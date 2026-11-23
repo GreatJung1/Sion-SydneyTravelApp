@@ -49,6 +49,22 @@ function clean<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/* ===== 날짜 안의 일정을 시작 시간순으로 정렬 ===== */
+function sortStopsByTime(stops: SharedStop[]): SharedStop[] {
+  // ===== 05:00, 09:30, 18:20을 분 단위로 변환 =====
+  function getMinutes(time: string): number {
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time.trim());
+
+    // ===== 미정, AM, PM 등은 맨 뒤에 유지 =====
+    if (!match) return 1440;
+
+    return Number(match[1]) * 60 + Number(match[2]);
+  }
+
+  // ===== 원본 배열을 변경하지 않고 정렬 =====
+  return [...stops].sort((a, b) => getMinutes(a.time) - getMinutes(b.time));
+}
+
 /* ===== 세 컬렉션을 실시간 감시하고 모두 도착한 뒤 화면 반영 ===== */
 export function watchSharedTrip(
   onData: (data: SharedData) => void,
@@ -81,11 +97,22 @@ export function watchSharedTrip(
     tripCollection("days"),
     (snapshot) => {
       const actualDays = snapshot.docs.filter(
-        (entry) => entry.id !== "__setup" && typeof entry.data().day === "number",
+        (entry) =>
+          entry.id !== "__setup" && typeof entry.data().day === "number",
       );
+
+      /* ===== 날짜 정렬 + 각 날짜 안의 시간순 정렬 ===== */
       state.days = actualDays
-        .map((entry) => entry.data() as SharedDay)
+        .map((entry) => {
+          const day = entry.data() as SharedDay;
+
+          return {
+            ...day,
+            stops: sortStopsByTime(day.stops),
+          };
+        })
         .sort((a, b) => a.day - b.day);
+
       state.initialized =
         snapshot.docs.some((entry) => entry.id === "__setup") ||
         actualDays.length > 0;
@@ -134,7 +161,8 @@ export async function initializeTripOnce(data: {
   visited: string[];
   expenses: Expense[];
 }): Promise<boolean> {
-  const writes = 1 + data.days.length + data.visited.length + data.expenses.length;
+  const writes =
+    1 + data.days.length + data.visited.length + data.expenses.length;
   if (writes > 400) {
     throw new Error("최초 이전할 기록이 너무 많아. 기록을 나눠 이전해야 해.");
   }
@@ -147,7 +175,9 @@ export async function initializeTripOnce(data: {
     // ===== 수동으로 저장한 기존 15일 문서가 있으면 덮어쓰지 않음 =====
     const existingFirstDay = await transaction.get(tripDoc("days", "15"));
     if (existingFirstDay.exists()) {
-      throw new Error("이미 Firestore에 일정이 있어. 기존 기록을 먼저 확인해 줘.");
+      throw new Error(
+        "이미 Firestore에 일정이 있어. 기존 기록을 먼저 확인해 줘.",
+      );
     }
 
     transaction.set(marker, { initializedAt: new Date().toISOString() });
@@ -179,11 +209,16 @@ export async function saveSharedStop(
     const updatedStops = editingId
       ? day.stops.map((entry) => (entry.id === editingId ? clean(stop) : entry))
       : [...day.stops, clean(stop)];
-    transaction.update(reference, { stops: updatedStops });
+    transaction.update(reference, {
+      stops: sortStopsByTime(updatedStops),
+    });
   });
 }
 
-export async function removeSharedStop(dayNumber: number, stopId: string): Promise<void> {
+export async function removeSharedStop(
+  dayNumber: number,
+  stopId: string,
+): Promise<void> {
   const reference = tripDoc("days", String(dayNumber));
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(reference);

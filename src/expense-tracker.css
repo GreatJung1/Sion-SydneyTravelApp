@@ -807,3 +807,386 @@
     flex-shrink: 0;
   }
 }
+
+
+/* ===== FOUR FEATURES: 경비와 일정 선택형 연결 ===== */
+.trip-exp-link {margin:2px 0 19px;display:grid;gap:9px;}
+.trip-exp-link-heading {display:flex;justify-content:space-between;align-items:center;color:#4c5845;font-size:12px;}
+.trip-exp-link-heading small {color:#8a9286;}
+.trip-exp-chosen {display:flex;align-items:center;gap:8px;background:#e9eee4;
+  border-radius:10px;padding:9px;font-size:12px;color:#4e6046;}
+.trip-exp-chosen span {flex:1;overflow-wrap:anywhere;}
+.trip-exp-chosen button {border:0;background:transparent;color:#6f5840;font-weight:700;}
+.trip-exp-picker-button {width:100%;border:1px solid #cbd8c1;background:#fff;
+  color:#536a49;border-radius:11px;padding:13px;font-size:13px;font-weight:800;}
+.trip-exp-picker-overlay {position:fixed;inset:0;z-index:200;
+  display:flex;justify-content:center;background:#f6f5f1;overflow-y:auto;}
+.trip-exp-picker-page {width:min(100%, 550px);padding:calc(20px + env(safe-area-inset-top)) 20px
+  calc(30px + env(safe-area-inset-bottom));box-sizing:border-box;}
+.trip-exp-picker-head {display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
+.trip-exp-picker-head span {font-size:10px;letter-spacing:.15em;color:#819077;}
+.trip-exp-picker-head h2 {margin:3px 0;font-size:27px;color:#34402f;}
+.trip-exp-picker-head button {background:white;border:1px solid #dde4d7;border-radius:50%;width:37px;height:37px;}
+.trip-exp-picker-list {display:grid;gap:0;margin:16px 0 20px;}
+.trip-exp-picker-stop {width:100%;display:flex;align-items:center;gap:13px;text-align:left;
+  border:0;border-bottom:1px solid #dde2d8;background:transparent;padding:13px 4px;color:#384234;}
+.trip-exp-picker-time {width:56px;flex-shrink:0;font-size:12px;color:#8b9384;font-weight:800;}
+.trip-exp-picker-desc {flex:1;display:grid;gap:5px;min-width:0;}
+.trip-exp-picker-desc strong {font-size:13px;}
+.trip-exp-picker-desc small {font-size:11px;color:#8c9387;}
+.trip-exp-picker-back {width:100%;padding:13px;border-radius:12px;background:#637456;
+  color:white;border:0;font-weight:800;}
+
+  /* ===== 사전 결제 + 정산 상태 디자인: 기존 CSS 아래에 추가 ===== */
+
+/* ===== 전체 지출: 원화 환산 합계 ===== */
+.exp-total .exp-total-krw {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #e0e7d8;
+  line-height: 1.4;
+}
+
+/* ===== 실제 결제 통화별 지출 내역 ===== */
+.exp-total .exp-total-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  margin-top: 8px;
+  padding-top: 9px;
+
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+
+  color: #e0e7d8;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.exp-status-filters {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-bottom: 12px;
+  padding: 1px 0 5px;
+  scrollbar-width: none;
+}
+.exp-status-filters::-webkit-scrollbar { display: none; }
+.exp-status-filters button {
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border: 1px solid #d7dfd1;
+  border-radius: 999px;
+  background: rgba(255,255,255,.55);
+  color: #687760;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.exp-status-filters button.active {
+  background: #637456;
+  border-color: #637456;
+  color: white;
+}
+.exp-status-tag {
+  display: inline-flex;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: #e8ebe2;
+  color: #60705c;
+  font-size: 9px;
+  line-height: 1.4;
+  font-weight: 700;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.exp-status-tag.is-complete,
+.exp-status-tag.is-personal { background: #e4ece2; color: #4a7552; }
+.exp-status-tag.is-partial { background: #f3ebd5; color: #886b30; }
+.exp-status-tag.is-pending { background: #f5e7df; color: #9a6350; }
+.exp-status-tag.is-unreviewed { background: #ebebeb; color: #747474; }
+.exp-settlement-inputs {
+  padding: 12px;
+  margin-top: 8px;
+  border: 1px solid #e0e7d8;
+  border-radius: 11px;
+  background: #eef0e9;
+}
+.exp-settlement-inputs .exp-field:last-child { margin-bottom: 0; }
+.exp-settlement-person > span { line-height: 1.75; }
+
+/* ===== 클릭 가능한 개인 경비 카드 ===== */
+.exp-person-card-button {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.exp-person-card-button:active {
+  background: #eef0e9;
+}
+
+.exp-person-card-button:focus-visible {
+  outline: 2px solid #626f52;
+  outline-offset: 3px;
+}
+
+.exp-person-card-hint {
+  align-self: flex-end;
+  margin-top: 5px;
+  font-size: 9px;
+  color: #899384;
+}
+
+/* ===== 개인 지출 상세 팝업 ===== */
+.exp-person-detail-modal {
+  max-height: 90dvh;
+}
+
+.exp-person-detail-note {
+  margin: 0 0 14px;
+  color: #788476;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.exp-person-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.exp-person-detail-summary > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px 10px;
+  border-radius: 11px;
+  background: #e9eee4;
+}
+
+.exp-person-detail-summary small {
+  color: #798675;
+  font-size: 10px;
+}
+
+.exp-person-detail-summary strong {
+  color: #34402f;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.exp-person-detail-subtitle {
+  margin: 20px 0 10px;
+  font-size: 14px;
+  color: #343a32;
+}
+
+.exp-person-detail-list {
+  display: grid;
+  gap: 8px;
+}
+
+.exp-person-detail-row {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #e0e7d8;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  color: #5d6b56;
+}
+
+.exp-person-detail-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 9px;
+  font-size: 12px;
+  color: #343a32;
+}
+
+.exp-person-detail-row-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.exp-person-detail-row-head span {
+  flex-shrink: 0;
+  font-weight: 750;
+}
+
+.exp-person-detail-row > small {
+  color: #8b9387;
+  font-size: 10px;
+}
+
+/* ===== 개인 상세: 전체 소비 금액 ===== */
+.exp-person-spending-total {
+  display: grid;
+  gap: 4px;
+  padding: 15px;
+  border-radius: 13px;
+  background: #e9eee4;
+  color: #34402f;
+}
+
+.exp-person-spending-total > small {
+  font-size: 11px;
+  color: #687b60;
+}
+
+.exp-person-spending-total > strong {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.exp-person-spending-total > span {
+  font-size: 12px;
+  color: #617356;
+}
+
+/* ===== 실제 AUD / KRW 소비 금액 ===== */
+.exp-person-original-amounts {
+  display: grid;
+  gap: 3px;
+  margin-top: 7px;
+  padding-top: 9px;
+  border-top: 1px solid #ced9c9;
+  font-size: 11px;
+  color: #526448;
+}
+
+/* ===== 공동 비용 / 개인 소비 섹션 ===== */
+.exp-person-spending-group {
+  margin-top: 19px;
+}
+
+.exp-person-spending-group-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.exp-person-spending-group-head h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  color: #34402f;
+}
+
+.exp-person-spending-group-head small {
+  font-size: 10px;
+  color: #838e7c;
+  line-height: 1.5;
+}
+
+/* ===== 그룹별 합계 ===== */
+.exp-person-group-totals {
+  display: grid;
+  gap: 3px;
+  text-align: right;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #526448;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 내역이 없을 때 ===== */
+.exp-person-spending-empty {
+  margin: 8px 0;
+  padding: 10px;
+  border-radius: 10px;
+  background: #eef0e9;
+  font-size: 11px;
+  color: #8a9385;
+}
+
+/* ===== 개별 지출 카드 ===== */
+.exp-person-spending-row {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid #e0e7d8;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.exp-person-spending-row-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 9px;
+  color: #343a32;
+  font-size: 12px;
+}
+
+.exp-person-spending-row-main strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.exp-person-spending-row-main b {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.exp-person-spending-row > small {
+  color: #8b9387;
+  font-size: 10px;
+}
+
+/* ===== 직접 결제한 내역: 펼치기 ===== */
+.exp-person-payment-details {
+  margin-top: 19px;
+  border-top: 1px solid #dfe5db;
+  padding-top: 14px;
+}
+
+.exp-person-payment-details > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+  color: #34402f;
+  font-size: 13px;
+  font-weight: 800;
+  list-style: none;
+}
+
+.exp-person-payment-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.exp-person-payment-details > summary::before {
+  content: "▸";
+  margin-right: 3px;
+  color: #75846e;
+}
+
+.exp-person-payment-details[open] > summary::before {
+  content: "▾";
+}
+
+/* ===== 직접 결제한 통화별 합계 ===== */
+.exp-person-payment-summary-amounts {
+  margin-left: auto;
+  display: grid;
+  gap: 3px;
+  text-align: right;
+  color: #526448;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.exp-person-payment-details .exp-person-detail-note {
+  margin: 12px 0;
+}
