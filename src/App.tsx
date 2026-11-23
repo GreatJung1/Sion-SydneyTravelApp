@@ -1,5 +1,17 @@
 import SydneyWeather from "./components/SydneyWeather";
 
+/* ===== Firebase 공동 일정/방문/경비 동기화 ===== */
+import {
+  watchSharedTrip,
+  initializeTripOnce,
+  saveSharedStop,
+  removeSharedStop,
+  toggleSharedVisit,
+  addSharedExpense,
+  editSharedExpense,
+  removeSharedExpense,
+} from "./tripCloud";
+
 /* ===== 새 경비 관리 화면 ===== */
 import ExpenseTracker from "./components/ExpenseTracker";
 
@@ -559,16 +571,6 @@ function App() {
 
   const [stopCategory, setStopCategory] = useState<Stop["category"]>("spot");
 
-  // ===== 일정 데이터 변경 시 브라우저에 자동 저장 =====
-  useEffect(() => {
-    localStorage.setItem("sydney-days-v1", JSON.stringify(days));
-  }, [days]);
-
-  // ===== 방문 완료 상태 변경 시 브라우저에 자동 저장 =====
-  useEffect(() => {
-    localStorage.setItem("sydney-visited-v1", JSON.stringify(visited));
-  }, [visited]);
-
   const [reels, setReels] = useState(seedReels);
 
   // ===== 실제 경비 기록을 브라우저 저장소에서 불러오기 =====
@@ -581,13 +583,95 @@ function App() {
     }
   });
 
-  // ===== 경비 추가·삭제 시 자동 저장 =====
+  // ===== 첫 접속의 로컬 데이터는 다른 기기와 합쳐지기 전에 보관 =====
+  const initialLocal = useRef<{
+    days: Day[];
+    visited: string[];
+    expenses: Expense[];
+  } | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<
+    "loading" | "setup" | "ready" | "error"
+  >("loading");
+  const [cloudError, setCloudError] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  // ===== 최초 마운트에서 로컬 데이터를 보관하고 공동 DB를 구독 =====
   useEffect(() => {
-    localStorage.setItem("sydney-expenses-v2", JSON.stringify(expenses));
-  }, [expenses]);
+    const snapshot = { days, visited, expenses };
+    initialLocal.current = snapshot;
+    try {
+      if (!localStorage.getItem("sydney-pre-firestore-backup-v1")) {
+        localStorage.setItem("sydney-pre-firestore-backup-v1", JSON.stringify(snapshot));
+      }
+    } catch {
+      // ===== 기기 저장공간 부족 시에도 Firebase 연결은 유지 =====
+    }
+
+    return watchSharedTrip(
+      (data) => {
+        setDays(data.days);
+        setVisited(data.visited);
+        setExpenses(data.expenses);
+        setCloudStatus(data.initialized ? "ready" : "setup");
+      },
+      (error) => {
+        setCloudError(error.message);
+        setCloudStatus("error");
+      },
+    );
+    // ===== 최초 구독만 생성하고 상태 변경으로 재구독하지 않음 =====
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ===== 서버 데이터가 정상 도착한 뒤에만 로컬 사본 갱신 =====
+  useEffect(() => {
+    if (cloudStatus !== "ready") return;
+    try { localStorage.setItem("sydney-days-v1", JSON.stringify(days)); } catch { /* 저장 공간 부족 */ }
+  }, [cloudStatus, days]);
+  useEffect(() => {
+    if (cloudStatus !== "ready") return;
+    try { localStorage.setItem("sydney-visited-v1", JSON.stringify(visited)); } catch { /* 저장 공간 부족 */ }
+  }, [cloudStatus, visited]);
+  useEffect(() => {
+    if (cloudStatus !== "ready") return;
+    try { localStorage.setItem("sydney-expenses-v2", JSON.stringify(expenses)); } catch { /* 저장 공간 부족 */ }
+  }, [cloudStatus, expenses]);
+
+  // ===== 최초 이전 전에 현재 기기의 기록을 JSON 파일로 내려받기 =====
+  function downloadLocalBackup() {
+    if (!initialLocal.current) return;
+    const contents = JSON.stringify(initialLocal.current, null, 2);
+    const blob = new Blob([contents], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "sydney-before-firestore.json";
+    link.click();
+    // ===== Safari가 파일 저장을 시작할 시간을 확보 =====
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // ===== 사용자가 명시적으로 선택했을 때만 최초 공동 데이터 업로드 =====
+  async function beginSharedTrip() {
+    const local = initialLocal.current;
+    if (cloudStatus !== "setup" || uploading || !local) return;
+    if (!window.confirm(
+      `이 기기의 ${local.days.length}일 일정·방문 ${local.visited.length}개·경비 ${local.expenses.length}건을 공동 DB의 최초 데이터로 등록할까?\n다른 기기에 더 최신 기록이 있다면 취소해야 해.`,
+    )) return;
+    setUploading(true);
+    setCloudError("");
+    try {
+      const created = await initializeTripOnce(local);
+      if (!created) setCloudError("이미 다른 기기가 공동 데이터를 시작했어. 서버 기록을 불러오는 중이야.");
+    } catch (error) {
+      setCloudError(error instanceof Error ? error.message : "초기 업로드에 실패했어.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const [likes, setLikes] = useState<string[]>(["Opera House"]);
-  const selected = days.find((d) => d.day === selectedDay) ?? days[0];
+  const selected = days.find((d) => d.day === selectedDay) ?? days[0] ?? seedDays[0];
   const doneToday = selected.stops.filter((s) => visited.includes(s.id)).length;
 
   // ===== 전체 여행 일정 개수 =====
@@ -629,11 +713,9 @@ function App() {
   const doneReels = reels.reduce((sum, r) => sum + r.done, 0);
 
   function toggleVisited(id: string) {
-    setVisited((previous) =>
-      previous.includes(id)
-        ? previous.filter((x) => x !== id)
-        : [...previous, id],
-    );
+    void toggleSharedVisit(id).catch((error: Error) => {
+      window.alert(`방문 체크 저장 실패: ${error.message}`);
+    });
   }
 
   // ===== 새 일정 입력창 열기 =====
@@ -668,86 +750,38 @@ function App() {
     setShowStopModal(true);
   }
 
-  // ===== 새 일정 저장 또는 기존 일정 수정 =====
+  // ===== 일정 추가 및 수정: Firestore 날짜별 트랜잭션 =====
   function saveStop(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-
-    // ===== 선택한 시간을 일정에 저장 =====
     const time = stopTime.trim();
     const name = stopName.trim();
-    const detail = stopDetail.trim();
-    // ===== 지도 링크는 선택적으로 저장 =====
-    const mapUrl = stopMapUrl.trim();
-
     if (!time || !name) return;
 
-    setDays((previous) =>
-      previous.map((day) => {
-        // 현재 선택된 날짜만 수정
-        if (day.day !== selectedDay) return day;
-
-        // 기존 일정 수정
-        if (editingStopId !== null) {
-          return {
-            ...day,
-            stops: day.stops.map((stop) =>
-              stop.id === editingStopId
-                ? {
-                    ...stop,
-                    time,
-                    name,
-                    detail,
-                    category: stopCategory,
-                    mapUrl,
-                    mapLocation: stopMapLocation ?? undefined, // 추가
-                  }
-                : stop,
-            ),
-          };
-        }
-
-        // 새 일정 추가
-        const newStop: Stop = {
-          id: `stop-${crypto.randomUUID()}`,
-          time,
-          name,
-          detail,
-          category: stopCategory,
-          mapUrl,
-          mapLocation: stopMapLocation ?? undefined, // 추가
-        };
-
-        return {
-          ...day,
-          stops: [...day.stops, newStop],
-        };
-      }),
-    );
-
-    setEditingStopId(null);
-    setShowStopModal(false);
+    const stop: Stop = {
+      id: editingStopId ?? `stop-${crypto.randomUUID()}`,
+      time,
+      name,
+      detail: stopDetail.trim(),
+      category: stopCategory,
+      mapUrl: stopMapUrl.trim(),
+      ...(stopMapLocation ? { mapLocation: stopMapLocation } : {}),
+    };
+    void saveSharedStop(selectedDay, stop, editingStopId)
+      .then(() => {
+        setEditingStopId(null);
+        setShowStopModal(false);
+      })
+      .catch((error: Error) => {
+        window.alert(`일정 저장 실패: ${error.message}`);
+      });
   }
 
-  // ===== 기존 일정 삭제 =====
+  // ===== 일정 삭제 시 방문 체크도 함께 삭제 =====
   function deleteStop(stop: Stop) {
-    const confirmed = window.confirm(`"${stop.name}" 일정을 삭제할까요?`);
-
-    if (!confirmed) return;
-
-    // 선택 날짜에서 해당 일정 삭제
-    setDays((previous) =>
-      previous.map((day) =>
-        day.day === selectedDay
-          ? {
-              ...day,
-              stops: day.stops.filter((item) => item.id !== stop.id),
-            }
-          : day,
-      ),
-    );
-
-    // 삭제한 일정의 완료 기록도 제거
-    setVisited((previous) => previous.filter((id) => id !== stop.id));
+    if (!window.confirm(`"${stop.name}" 일정을 삭제할까요?`)) return;
+    void removeSharedStop(selectedDay, stop.id).catch((error: Error) => {
+      window.alert(`일정 삭제 실패: ${error.message}`);
+    });
   }
 
   function changeReel(id: string) {
@@ -761,6 +795,63 @@ function App() {
   function toggleLike(name: string) {
     setLikes((prev) =>
       prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name],
+    );
+  }
+
+  // ===== Firestore 초기 연결 중: 수정할 수 없는 대기 화면 =====
+  if (cloudStatus === "loading") {
+    return (
+      <main style={{ padding: 32, textAlign: "center" }}>
+        <h2>SYDNEY ’26</h2>
+        <p>공동 여행 기록 연결 중...</p>
+        <p>네트워크 상태를 확인해 줘.</p>
+      </main>
+    );
+  }
+
+  if (cloudStatus === "error") {
+    return (
+      <main style={{ padding: 32, textAlign: "center" }}>
+        <h2>공동 기록 연결 실패</h2>
+        <p role="alert">{cloudError}</p>
+        <button type="button" onClick={() => window.location.reload()}>다시 시도</button>
+      </main>
+    );
+  }
+
+  if (cloudStatus === "setup") {
+    return (
+      <main style={{ minHeight: "100dvh", display: "grid", placeItems: "center", padding: 24 }}>
+        <section style={{ width: "100%", maxWidth: 420, display: "grid", gap: 14 }}>
+          <h1>SYDNEY ’26</h1>
+          <h2>공동 여행 기록 시작하기</h2>
+          <p>아직 Firestore에 공동 일정이 없어. <strong>최신 일정이 들어 있는 기기에서만</strong> 아래 버튼을 눌러.</p>
+          <p>
+            이 기기: {initialLocal.current?.days.length ?? 0}일 일정 ·
+            장소 {initialLocal.current?.days.reduce((sum, day) => sum + day.stops.length, 0) ?? 0}곳 ·
+            방문 {initialLocal.current?.visited.length ?? 0}개 ·
+            경비 {initialLocal.current?.expenses.length ?? 0}건
+          </p>
+          <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
+            {initialLocal.current?.days.map((day) => (
+              <div key={day.day}>12월 {day.day}일 — {day.title} ({day.stops.length}곳)</div>
+            ))}
+          </div>
+          <button type="button" onClick={downloadLocalBackup} style={{ padding: 14 }}>
+            이 기기 기록 JSON 백업
+          </button>
+          <button
+            type="button"
+            onClick={() => void beginSharedTrip()}
+            disabled={uploading}
+            style={{ padding: 16, background: "#222", color: "#fff", borderRadius: 10 }}
+          >
+            {uploading ? "업로드 중..." : "이 기기 기록으로 공동 DB 시작"}
+          </button>
+          {cloudError && <p role="alert" style={{ color: "#b42318" }}>{cloudError}</p>}
+          <small>다른 아이폰에서는 초기 업로드하지 않아도 돼. 공동 DB가 만들어지면 자동으로 불러와.</small>
+        </section>
+      </main>
     );
   }
 
@@ -1142,21 +1233,21 @@ function App() {
             expenses={expenses}
             // ===== 새로운 지출 등록 =====
             onAddExpense={(expense) => {
-              setExpenses((previous) => [expense, ...previous]);
+              void addSharedExpense(expense).catch((error: Error) => {
+                window.alert(`경비 추가 실패: ${error.message}`);
+              });
             }}
-            // ===== 기존 지출 수정: 같은 ID의 기록만 변경 =====
+            // ===== 개별 지출 문서 수정 =====
             onUpdateExpense={(updatedExpense) => {
-              setExpenses((previous) =>
-                previous.map((expense) =>
-                  expense.id === updatedExpense.id ? updatedExpense : expense,
-                ),
-              );
+              void editSharedExpense(updatedExpense).catch((error: Error) => {
+                window.alert(`경비 수정 실패: ${error.message}`);
+              });
             }}
-            // ===== 기존 지출 삭제 =====
+            // ===== 개별 지출 문서 삭제 =====
             onDeleteExpense={(id) => {
-              setExpenses((previous) =>
-                previous.filter((expense) => expense.id !== id),
-              );
+              void removeSharedExpense(id).catch((error: Error) => {
+                window.alert(`경비 삭제 실패: ${error.message}`);
+              });
             }}
           />
         )}
