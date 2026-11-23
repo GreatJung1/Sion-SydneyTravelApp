@@ -1,0 +1,63 @@
+
+# ===== 시드니 여행 앱 GitHub Pages 자동 배포 =====
+name: Deploy Sydney Travel App
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# ===== GitHub Pages 배포 권한 =====
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      # ===== 저장소 코드 가져오기 =====
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ===== Node.js 설치 =====
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # ===== 라이브러리 설치 =====
+      - name: Install
+        run: npm ci
+
+      # ===== 실제 저장소 이름으로 웹사이트 빌드 =====
+      - name: Build
+        run: npm run build
+        env:
+          GITHUB_PAGES_BASE: /${{ github.event.repository.name }}/
+
+      # ===== GitHub Pages 설정 =====
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      # ===== 완성된 웹사이트 업로드 =====
+      - name: Upload
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+      # ===== 웹사이트 배포 =====
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
