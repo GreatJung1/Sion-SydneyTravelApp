@@ -1,0 +1,752 @@
+
+/* ===== 경비 페이지 전체 ===== */
+.exp-page {
+  width: 100%;
+  padding-bottom: 24px;
+  box-sizing: border-box;
+}
+
+/* ===== 제목 아래 오른쪽 환율 ===== */
+.exp-intro p {
+  margin: 8px 0 0;
+  text-align: right;
+  font-size: 11px;
+  color: #848b7a;
+  line-height: 1.5;
+}
+
+/* ===== 기존보다 작은 전체 지출 카드 ===== */
+.exp-total {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 0px;
+  padding: 10px 20px;
+  border-radius: 17px;
+  background: #343a32;
+  color: #ffffff;
+}
+
+/* ===== 전체 지출 카드 상단 라벨 ===== */
+.exp-total > span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #e0e7d8;
+}
+
+/* ===== 전체 지출 금액 ===== */
+.exp-total > strong {
+  font-size: 29px;
+  font-weight: 800;
+  line-height: 1.0;
+  letter-spacing: -0.8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 전체 금액의 원화 참고 표시 ===== */
+.exp-total > small {
+  font-size: 10px;
+  color: #e0e7d8;
+}
+
+/* ===== 경비 화면 섹션 ===== */
+.exp-section {
+  margin-top: 10px;
+}
+
+/* ===== 섹션 제목 및 버튼 정렬 ===== */
+.exp-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 13px;
+}
+
+.exp-section-header h2 {
+  margin: 0;
+  color: #343a32;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+/* ===== 섹션 설명 ===== */
+.exp-section-header p {
+  margin: 5px 0 0;
+  color: #8a9085;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* ===== 세 사람을 나란히 표시 ===== */
+.exp-people-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+/* ===== 개인별 부담액 카드 ===== */
+.exp-person-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 13px 10px;
+  border: 1px solid #e5e8df;
+  border-radius: 13px;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+/* ===== 개인 이름 ===== */
+.exp-person-name {
+  color: #343a32;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+/* ===== 개인별 AUD 부담액 ===== */
+.exp-person-card > strong {
+  color: #282b26;
+  font-size: clamp(12px, 3.1vw, 16px);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 아주 작은 원화 환산 금액 ===== */
+.exp-won {
+  color: #92998c;
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 실제 결제액 ===== */
+.exp-person-paid {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid #edf0e8;
+  color: #7b8475;
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* ===== 새 지출 추가 버튼 ===== */
+.exp-add-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 5px;
+  border: 1px solid #dce4d5;
+  border-radius: 10px;
+  background: #e5e9db;
+  color: #526448;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* ===== 지출 내역 목록 ===== */
+.exp-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== 지출 한 건 ===== */
+.exp-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e5e8df;
+}
+
+/* ===== 지출 카테고리 아이콘 ===== */
+.exp-item-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 39px;
+  height: 39px;
+  border-radius: 12px;
+  background: #e8ecdf;
+  color: #343a32;
+}
+
+/* ===== 지출 상세 정보 ===== */
+.exp-item-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* ===== 카테고리 / N빵 여부 ===== */
+.exp-item-category {
+  font-size: 9px;
+  font-weight: 700;
+  color: #7b886f;
+}
+
+/* ===== 지출 이름 ===== */
+.exp-item-info strong {
+  color: #343a32;
+  font-size: 14px;
+  font-weight: 1000;
+  overflow-wrap: anywhere;
+  padding-bottom: 2px;
+}
+
+/* ===== 결제자 및 참여자 정보 ===== */
+.exp-item-info small {
+  color: #899084;
+  font-size: 8px;
+  line-height: 1.4;
+  
+}
+
+/* ===== 지출 금액 / 삭제 버튼 ===== */
+.exp-item-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 3px;
+  text-align: right;
+}
+
+/* ===== 지출 AUD 금액 ===== */
+.exp-item-right > strong {
+  color: #282b26;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 지출 삭제 버튼 ===== */
+.exp-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0;
+  padding: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a1a69d;
+  cursor: pointer;
+}
+
+/* ===== 지출이 없을 때 ===== */
+.exp-empty {
+  padding: 28px 12px;
+  border: 1px dashed #d7dfd1;
+  border-radius: 12px;
+  color: #898f83;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+/* ===== 환율 참고 안내 ===== */
+.exp-exchange-note {
+  margin: 22px 0 0;
+  color: #9a9e95;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+/* ===== 지출 추가 모달 배경 ===== */
+.exp-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  background: rgba(18, 24, 17, 0.55);
+}
+
+/* ===== 지출 추가 모달 본체 ===== */
+.exp-modal {
+  width: min(100%, 440px);
+  max-height: 94dvh;
+  overflow-y: auto;
+  padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 22px 22px 0 0;
+  background: #f6f5f1;
+  box-sizing: border-box;
+}
+
+/* ===== 모달 상단 헤더 ===== */
+.exp-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 19px;
+}
+
+.exp-modal-header h2 {
+  margin: 0;
+  color: #282b26;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.exp-modal-header button {
+  display: flex;
+  border: 0;
+  background: transparent;
+  color: #697563;
+  cursor: pointer;
+}
+
+/* ===== 입력 필드 공통 ===== */
+.exp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 15px;
+  color: #4c5845;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ===== 입력창 및 선택창 ===== */
+.exp-field input,
+.exp-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 47px;
+  padding: 11px 12px;
+  border: 1px solid #dfe5d9;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #282b26;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  box-sizing: border-box;
+}
+
+/* ===== 금액 / 결제자 입력 행 ===== */
+.exp-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* ===== N빵 / 개인 구분 ===== */
+.exp-split-section {
+  margin: 6px 0 18px;
+}
+
+/* ===== 분배 섹션 제목 ===== */
+.exp-field-title {
+  display: block;
+  margin-bottom: 9px;
+  color: #4c5845;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ===== 분배 방식 선택 영역 ===== */
+.exp-mode-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* ===== 분배 방식 기본 버튼 ===== */
+.exp-mode-options button {
+  padding: 12px;
+  border: 1px solid #dfe5d9;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #7b8475;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* ===== 선택한 분배 방식 ===== */
+.exp-mode-options button.active {
+  border-color: #798b6b;
+  background: #e5e9db;
+  color: #526448;
+}
+
+/* ===== 참여자 선택 안내 ===== */
+.exp-field-help {
+  margin: -4px 0 10px;
+  color: #949b90;
+  font-size: 10px;
+}
+
+/* ===== 3명 참여자 체크 영역 ===== */
+.exp-participant-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+/* ===== 참여자 한 명 ===== */
+.exp-participant {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 5px;
+  border: 1px solid #dfe5d9;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #424d3b;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ===== 참여자 체크박스 ===== */
+.exp-participant input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #626f52;
+}
+
+/* ===== 분담 금액 미리보기 ===== */
+.exp-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 17px 0;
+  padding: 14px;
+  border: 1px solid #e0e7d8;
+  border-radius: 12px;
+  background: #eef0e9;
+}
+
+/* ===== 미리보기 제목 ===== */
+.exp-preview > strong {
+  margin-bottom: 3px;
+  color: #526448;
+  font-size: 12px;
+}
+
+/* ===== 개인별 미리보기 한 줄 ===== */
+.exp-preview-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #66715e;
+}
+
+/* ===== 미리보기 AUD 금액 ===== */
+.exp-preview-row b {
+  color: #303c2c;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 입력 오류 메시지 ===== */
+.exp-form-error {
+  margin: 10px 0;
+  color: #ae655c;
+  font-size: 11px;
+}
+
+/* ===== 지출 저장 버튼 ===== */
+.exp-save-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #626f52;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* ===== 작은 모바일 화면의 카드 간격 조정 ===== */
+@media (max-width: 375px) {
+  .exp-person-card {
+    padding: 12px 7px;
+  }
+
+  .exp-person-name {
+    font-size: 11px;
+  }
+
+  .exp-person-paid {
+    font-size: 9px;
+  }
+
+  .exp-item {
+    gap: 8px;
+  }
+}
+
+/* ===== 최종 정산 목록 ===== */
+.exp-settlement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+/* ===== 한 건의 송금 안내 ===== */
+.exp-settlement-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 13px;
+  border: 1px solid #e0e7d8;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+/* ===== 보내는 사람 → 받는 사람 ===== */
+.exp-settlement-people {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  color: #343e30;
+  font-size: 12px;
+}
+
+/* ===== 정산 화살표 ===== */
+.exp-settlement-people span {
+  color: #8a9780;
+}
+
+/* ===== 송금 금액 ===== */
+.exp-settlement-amount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+/* ===== AUD 금액 ===== */
+.exp-settlement-amount strong {
+  color: #526448;
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 원화 참고 금액 ===== */
+.exp-settlement-amount small {
+  color: #92998c;
+  font-size: 10px;
+}
+
+/* ===== 정산할 금액이 없을 때 ===== */
+.exp-settlement-empty {
+  padding: 16px;
+  margin: 0;
+  border-radius: 12px;
+  background: #eef0e9;
+  color: #7e8975;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ===== 개인별 카드 아래 정산 버튼 정렬 ===== */
+.exp-settlement-link-line {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* ===== 환율 표시처럼 작고 간결한 버튼 ===== */
+.exp-settlement-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: #848b7a;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ===== 버튼의 오른쪽 화살표 ===== */
+.exp-settlement-link span {
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* ===== 최종 정산 상세창 ===== */
+.exp-settlement-dialog {
+  max-height: 85dvh;
+}
+
+/* ===== 정산 설명 문구 ===== */
+.exp-settlement-description {
+  margin: 0 0 15px;
+  color: #8a9085;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ===== 세 사람의 결제 및 부담 요약 ===== */
+.exp-settlement-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  background: #eef0e9;
+}
+
+/* ===== 개인별 정산 정보 ===== */
+.exp-settlement-person {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* ===== 이름과 금액 상세 ===== */
+.exp-settlement-person > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* ===== 개인 이름 ===== */
+.exp-settlement-person strong {
+  color: #303c2c;
+  font-size: 12px;
+}
+
+/* ===== 실제 결제액과 부담액 ===== */
+.exp-settlement-person small {
+  color: #818b7b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+/* ===== 받을 금액 또는 보낼 금액 ===== */
+.exp-settlement-person > span {
+  color: #526448;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ===== 송금 목록 소제목 ===== */
+.exp-settlement-subtitle {
+  margin: 22px 0 11px;
+  color: #282b26;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+/* ===== 지출 한 건의 스와이프 영역 ===== */
+.exp-swipe {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+
+  /* ===== 세로 페이지 스크롤은 유지 ===== */
+  touch-action: pan-y;
+}
+
+/* ===== 실제 지출 카드가 좌우로 이동하는 영역 ===== */
+.exp-swipe-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: #f6f5f1;
+  transition: transform 0.22s ease;
+}
+
+/* ===== 왼쪽으로 밀었을 때 버튼 노출 ===== */
+.exp-swipe-content.is-open {
+  transform: translateX(-116px);
+}
+
+/* ===== 기존 지출 행 디자인 유지 ===== */
+.exp-swipe-content .exp-item {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ===== 오른쪽에 숨어 있는 수정·삭제 영역 ===== */
+.exp-swipe-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+
+  width: 116px;
+  display: flex;
+  gap: 4px;
+  padding: 4px 0;
+  box-sizing: border-box;
+}
+
+/* ===== 수정·삭제 공통 버튼 ===== */
+.exp-swipe-actions button {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  min-width: 0;
+  padding: 0;
+  border: none;
+  border-radius: 9px;
+
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ===== 수정 버튼 ===== */
+.exp-swipe-edit {
+  background: #6b7c5a;
+}
+
+/* ===== 삭제 버튼 ===== */
+.exp-swipe-delete {
+  background: #aa736b;
+}
+
+/* ===== 애니메이션 최소화 설정 지원 ===== */
+@media (prefers-reduced-motion: reduce) {
+  .exp-swipe-content {
+    transition: none;
+  }
+}
