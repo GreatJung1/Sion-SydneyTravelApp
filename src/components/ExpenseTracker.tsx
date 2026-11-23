@@ -895,7 +895,6 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
               <label className="exp-field">
                 사용 내역
                 <input
-                  autoFocus
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder="예: 브런치, 카페, 택시"
