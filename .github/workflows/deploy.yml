@@ -39,6 +39,8 @@ jobs:
         env:
           # GitHub Pages의 /저장소이름/ 하위 경로에서 JS/CSS가 로딩되도록 설정
           GITHUB_PAGES_BASE: /${{ github.event.repository.name }}/
+          
+          VITE_TRAVEL_LOGIN_EMAIL: ${{ vars.VITE_TRAVEL_LOGIN_EMAIL }}
 
       - name: Configure Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
