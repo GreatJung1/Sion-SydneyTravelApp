@@ -59,6 +59,7 @@ import {
   X,
   Pencil,
   Trash2,
+  Copy,
 } from "lucide-react";
 import "./index.css";
 
@@ -609,6 +610,53 @@ function App() {
     }
   });
 
+  // ===== 전체 여행 일정 클립보드 복사 =====
+  async function copyFullItinerary(format: "text" | "json") {
+    const sortedDays = [...days].sort((a, b) => a.day - b.day);
+
+    const output =
+      format === "json"
+        ? JSON.stringify(
+            {
+              trip: "Sydney 2026",
+              days: sortedDays,
+              visited,
+            },
+            null,
+            2,
+          )
+        : [
+            "시드니 여행 전체 일정",
+            "",
+            ...sortedDays.map((day) => {
+              return [
+                `━━ 12월 ${day.day}일 ━━`,
+                `${day.title} · ${day.subtitle}`,
+                "",
+                ...day.stops.map((stop) =>
+                  [
+                    `${stop.time} | ${stop.name}`,
+                    stop.detail,
+                    stop.mapLocation?.address
+                      ? `주소: ${stop.mapLocation.address}`
+                      : "",
+                    stop.mapUrl ? `지도: ${stop.mapUrl}` : "",
+                  ]
+                    .filter(Boolean)
+                    .join("\n"),
+                ),
+              ].join("\n");
+            }),
+          ].join("\n\n");
+
+    try {
+      await navigator.clipboard.writeText(output);
+      window.alert("전체 일정이 복사됐어!");
+    } catch {
+      window.alert("복사 실패: 브라우저 권한을 확인해 줘.");
+    }
+  }
+
   // ===== 일정 수정 모달 상태 =====
   const [showStopModal, setShowStopModal] = useState(false);
   const [editingStopId, setEditingStopId] = useState<string | null>(null);
@@ -640,6 +688,11 @@ function App() {
 
   // ===== 지도 선택창 열림/닫힘 =====
   const [showMapPicker, setShowMapPicker] = useState(false);
+
+
+const [showSavedPlaceList, setShowSavedPlaceList] = useState(false);
+const [savedPlaceQuery, setSavedPlaceQuery] = useState("");
+
 
   const [stopCategory, setStopCategory] = useState<Stop["category"]>("spot");
 
@@ -802,6 +855,53 @@ function App() {
     [days],
   );
 
+  // ===== 지도 컬렉션에서 재사용 가능한 장소 =====
+  const reusablePlaces = useMemo(() => {
+    const seen = new Set<string>();
+
+    return mapCollection
+      .filter((place) => {
+        const placeLabel =
+          place.mapLocation?.name?.trim() ||
+          place.name.trim();
+
+        const key = place.mapLocation
+          ? `${placeLabel.toLowerCase()}:${place.mapLocation.lat.toFixed(5)},${place.mapLocation.lng.toFixed(5)}`
+          : `${place.name.trim().toLowerCase()}:${place.mapUrl ?? ""}`;
+
+        if (seen.has(key)) return false;
+
+        seen.add(key);
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          Number(b.category === "stay") -
+            Number(a.category === "stay") ||
+          (a.mapLocation?.name || a.name).localeCompare(
+            b.mapLocation?.name || b.name,
+            "ko"
+          )
+      );
+  }, [mapCollection]);
+
+  // ===== 저장된 장소 이름 및 주소 검색 =====
+  const filteredReusablePlaces = useMemo(() => {
+    const query = savedPlaceQuery.trim().toLowerCase();
+
+    return reusablePlaces.filter((place) =>
+      [
+        place.name,
+        place.mapLocation?.name ?? "",
+        place.mapLocation?.address ?? "",
+        place.category === "stay" ? "숙소 호텔" : "",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [reusablePlaces, savedPlaceQuery]);
+
   /* ===== 방문 필터 및 위치순 정렬: 위치 정보는 기기 내 메모리에만 보관 ===== */
   const visiblePlaces = useMemo(() => {
     const filtered = mapCollection.filter(
@@ -884,22 +984,31 @@ function App() {
   }
 
   // ===== 새 일정 입력창 열기 =====
-  function openAddStop() {
-    setEditingStopId(null);
-    setStopMapLocation(null);
-    // ===== 새 일정의 지도 링크는 빈칸으로 시작 =====
-    setStopMapUrl("");
+ 
+function openAddStop() {
+  setEditingStopId(null);
+  setStopMapLocation(null);
+  setStopMapUrl("");
 
-    // ===== 새 일
-    setStopTime("");
+  setStopTime("");
+  setStopName("");
+  setStopDetail("");
+  setStopCategory("spot");
 
-    setStopName("");
-    setStopDetail("");
-    setStopCategory("spot");
-    setShowStopModal(true);
-  }
+  setShowSavedPlaceList(false);
+  setSavedPlaceQuery("");
 
-  function openEditStop(stop: Stop) {
+  setShowStopModal(true);
+}
+
+
+  
+function openEditStop(stop: Stop) {
+  setShowSavedPlaceList(false);
+  setSavedPlaceQuery("");
+
+  // 아래의 기존 코드는 그대로 유지
+
     setEditingStopId(stop.id);
     // ===== 기존 일정에 등록된 지도 링크 불러오기 =====
     setStopMapUrl(stop.mapUrl ?? "");
@@ -913,6 +1022,35 @@ function App() {
     setStopDetail(stop.detail);
     setStopCategory(stop.category);
     setShowStopModal(true);
+  }
+
+  // ===== 기존 장소 정보 불러오기 =====
+  function importSavedPlace(
+    place: (typeof mapCollection)[number]
+  ) {
+    const locationName =
+      place.mapLocation?.name?.trim();
+
+    setStopName(
+      locationName &&
+        locationName !== "지도에서 선택한 위치"
+        ? locationName
+        : place.name
+    );
+
+    setStopCategory(place.category);
+
+    setStopMapLocation(
+      place.mapLocation
+        ? { ...place.mapLocation }
+        : null
+    );
+
+    setStopMapUrl(place.mapUrl ?? "");
+
+    // 시간과 상세 내용은 사용자가 직접 정함
+    setShowSavedPlaceList(false);
+    setSavedPlaceQuery("");
   }
 
   // ===== 일정 추가 및 수정: Firestore 날짜별 트랜잭션 =====
@@ -1269,14 +1407,11 @@ function App() {
                     }
 
                     // ===== 수정·삭제 메뉴가 열렸으면 먼저 닫기 =====
-                    if (
-  openSwipeId === s.id ||
-  openQuickSwipeId === s.id
-) {
-  setOpenSwipeId(null);
-  setOpenQuickSwipeId(null);
-  return;
-}
+                    if (openSwipeId === s.id || openQuickSwipeId === s.id) {
+                      setOpenSwipeId(null);
+                      setOpenQuickSwipeId(null);
+                      return;
+                    }
 
                     // ===== 완료 상태 변경 =====
                     toggleVisited(s.id);
@@ -1305,38 +1440,35 @@ function App() {
 
                 {/* ===== 장소명 클릭: Google Maps 열기 ===== */}
 
-                
-<span className="stop-copy">
-  {/* ===== 장소 이름 ===== */}
-  {getGoogleMapsUrl(s) ? (
-    <a
-      href={getGoogleMapsUrl(s) ?? undefined}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="stop-name-link"
-      onPointerDown={(e) => e.stopPropagation()}
-      onPointerUp={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <strong>{s.name}</strong>
-    </a>
-  ) : (
-    <strong>{s.name}</strong>
-  )}
+                <span className="stop-copy">
+                  {/* ===== 장소 이름 ===== */}
+                  {getGoogleMapsUrl(s) ? (
+                    <a
+                      href={getGoogleMapsUrl(s) ?? undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="stop-name-link"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onPointerUp={(e) => e.stopPropagation()}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <strong>{s.name}</strong>
+                    </a>
+                  ) : (
+                    <strong>{s.name}</strong>
+                  )}
 
-  {/* ===== 장소 설명 ===== */}
-  {s.detail && (
-    <small>{s.detail}</small>
-  )}
+                  {/* ===== 장소 설명 ===== */}
+                  {s.detail && <small>{s.detail}</small>}
 
-  {/* ===== 해당 장소에 연결된 경비 합계 ===== */}
-  {tab === "plan" &&
-    expenses.some((e) => e.stopId === s.id) && (
-      <span className="trip-stop-spent">
-        사용 {formatLinkedExpenseSummary(expenses, s.id)}
-      </span>
-    )}
-</span>
+                  {/* ===== 해당 장소에 연결된 경비 합계 ===== */}
+                  {tab === "plan" &&
+                    expenses.some((e) => e.stopId === s.id) && (
+                      <span className="trip-stop-spent">
+                        사용 {formatLinkedExpenseSummary(expenses, s.id)}
+                      </span>
+                    )}
+                </span>
 
                 {/* ===== 홈 화면에서만 화살표 표시 ===== */}
                 {tab === "home" && (
@@ -1504,16 +1636,104 @@ function App() {
 
             <section className="block-section">
               {dayStrip}
-              <div className="day-summary detail">
-                <div>
-                  <span>
-                    DEC {selected.day} · {selected.weekday}
-                  </span>
-                  <h3>{selected.title}</h3>
-                  <p>{selected.subtitle}</p>
+
+              {/* ===== 날짜 제목 영역 ===== */}
+              <div
+                className="day-summary detail"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "stretch",
+                  gap: 0,
+                }}
+              >
+                {/* 첫 번째 줄: 날짜·제목 + 완료 개수·추가 */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 8,
+                    minWidth: 0,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <span
+                      style={{
+                        color: "#8b927b",
+                        fontSize: 9,
+                        fontWeight: 800,
+                        letterSpacing: "0.11em",
+                      }}
+                    >
+                      DEC {selected.day} · {selected.weekday}
+                    </span>
+                    <h3>{selected.title}</h3>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <div className="mini-progress">
+                      {doneToday}/{selected.stops.length}
+                      <CheckCircle2 size={15} />
+                    </div>
+
+                    <button
+                      type="button"
+                      className="exp-add-button"
+                      onClick={openAddStop}
+                      aria-label="일정 추가"
+                      title="일정 추가"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="mini-progress">
-                  {doneToday}/{selected.stops.length} <CheckCircle2 size={15} />
+
+                {/* 두 번째 줄: 설명 + 지도 버튼 */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 8,
+                    width: "100%",
+                  }}
+                >
+                  <p style={{ margin: 0, minWidth: 0 }}>{selected.subtitle}</p>
+
+                  
+<button
+  type="button"
+  className="plan-map-top-button"
+  onClick={() => setShowDayMap(true)}
+  style={{
+    width: "auto",
+    flexShrink: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "2px 0",
+    fontSize: 10,
+    whiteSpace: "nowrap",
+    border: "none",
+    background: "transparent",
+    boxShadow: "none",
+    borderRadius: 0,
+    color: "#6a7756",
+    cursor: "pointer",
+  }}
+>
+  <MapPin size={12} />
+  지도로 한눈에 보기
+</button>
+
                 </div>
               </div>
 
@@ -1523,25 +1743,49 @@ function App() {
               {/* ===== 해당 날짜의 전체 일정 목록 ===== */}
               {stopList}
 
-              {/* ===== 날짜별 동선 지도 열기 ===== */}
-              <button
-                type="button"
-                className="plan-add-button"
-                onClick={() => setShowDayMap(true)}
-              >
-                <MapPin size={17} />
-                오늘 동선 지도로 보기
-              </button>
-
-              {/* ===== 모든 일정 아래에 추가 버튼 ===== */}
-              <div className="plan-add-area">
+              <div className="plan-copy-actions">
+                {/* ===== 선택한 날짜 초압축 일정 복사 ===== */}
                 <button
                   type="button"
-                  className="plan-add-button"
-                  onClick={openAddStop}
+                  className="plan-copy-button"
+                  onClick={async () => {
+                    const compact = selected.stops
+                      .map((stop) => `${stop.time || "미정"} : ${stop.name}`)
+                      .join("\n");
+
+                    try {
+                      await navigator.clipboard.writeText(
+                        compact || "등록된 일정 없음",
+                      );
+
+                      window.alert(
+                        `12월 ${selected.day}일 초압축 일정 복사 완료!`,
+                      );
+                    } catch {
+                      window.alert("클립보드 복사에 실패했어.");
+                    }
+                  }}
                 >
-                  <Plus size={17} />
-                  일정 추가
+                  <Copy size={12} />
+                  하루 일정 요약
+                </button>
+
+                <button
+                  type="button"
+                  className="plan-copy-button"
+                  onClick={() => void copyFullItinerary("text")}
+                >
+                  <Copy size={12} />
+                  전체 일정 복사
+                </button>
+
+                <button
+                  type="button"
+                  className="plan-copy-button"
+                  onClick={() => void copyFullItinerary("json")}
+                >
+                  <Copy size={12} />
+                  JSON 복사
                 </button>
               </div>
             </section>
@@ -1633,7 +1877,6 @@ function App() {
               <h1>
                 저장<span className="period">..</span>
               </h1>
-              <p>가고 싶은 곳과 기억할 장소들.</p>
             </div>
 
             {/* ===== 일정에서 자동 생성되는 지도 컬렉션 ===== */}
@@ -1899,6 +2142,73 @@ function App() {
 
             {/* ===== 일정 입력 폼 ===== */}
             <form onSubmit={saveStop}>
+
+{/* ===== 저장된 장소에서 가져오기 ===== */}
+<div className="saved-place-import">
+  <button
+    type="button"
+    className="saved-place-import-toggle"
+    aria-expanded={showSavedPlaceList}
+    onClick={() => {
+      setShowSavedPlaceList((open) => !open);
+      setSavedPlaceQuery("");
+    }}
+  >
+    <span>
+      <Bookmark size={15} />
+      저장된 장소 가져오기
+    </span>
+    <ChevronRight size={15} />
+  </button>
+
+  {showSavedPlaceList && (
+    <div className="saved-place-import-panel">
+      <input
+        type="search"
+        value={savedPlaceQuery}
+        onChange={(e) =>
+          setSavedPlaceQuery(e.target.value)
+        }
+        placeholder="장소명 · 숙소 · 주소 검색"
+        aria-label="저장된 장소 검색"
+      />
+
+      <div className="saved-place-import-results">
+        {filteredReusablePlaces.length === 0 ? (
+          <p className="saved-place-import-empty">
+            {reusablePlaces.length === 0
+              ? "위치를 연결해 저장한 일정이 아직 없어."
+              : "검색 결과가 없어."}
+          </p>
+        ) : (
+          filteredReusablePlaces.map((place) => (
+            <button
+              key={place.id}
+              type="button"
+              className="saved-place-import-option"
+              onClick={() => importSavedPlace(place)}
+            >
+              <strong>
+                {place.mapLocation?.name || place.name}
+              </strong>
+
+              <small>
+                {place.category === "stay"
+                  ? "숙소 · "
+                  : ""}
+                12월 {place.day}일 등록
+                {place.mapLocation?.address
+                  ? ` · ${place.mapLocation.address}`
+                  : ""}
+              </small>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  )}
+</div>
+
               {/* ===== 시간: 기기 기본 시간 선택기 ===== */}
               <label>
                 시간

@@ -1,0 +1,649 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 867b4fe..c67c002 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -460,6 +460,30 @@ function getGoogleMapsUrl(stop: Stop): string | null {
+   return null;
+ }
+ 
++/* ===== FOUR-FEATURES 2026 ===== */
++/* ===== 무료 Google Maps 길찾기: 지도 좌표가 정확할 때만 표시 ===== */
++type DirectionsMode = "walking" | "transit" | "driving";
++function getDirectionsUrl(stop: Stop, mode: DirectionsMode): string | null {
++  const loc = stop.mapLocation;
++  if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) return null;
++  const destination = encodeURIComponent(`${loc.lat},${loc.lng}`);
++  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=${mode}`;
++}
++
++/* ===== 좌표 간 직선거리 (m): Haversine 공식 ===== */
++function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
++  const rad = Math.PI / 180;
++  const dLat = (b.lat - a.lat) * rad;
++  const dLon = (b.lng - a.lng) * rad;
++  const h = Math.sin(dLat / 2) ** 2 +
++    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
++  return 6371000 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
++}
++
++function formatDistance(meters: number) {
++  return meters < 1000 ? `${Math.round(meters)}m` : `${(meters / 1000).toFixed(1)}km`;
++}
++
+ function getTripCountdown() {
+   const start = Date.UTC(2026, 11, 15);
+   const now = new Date();
+@@ -516,6 +540,16 @@ function ProgressBar({
+ function App() {
+   const [tab, setTab] = useState<Tab>("home");
+ 
++  /* ===== 저장 탭 방문 필터·내 주변·길찾기 모드 ===== */
++  const [savedFilter, setSavedFilter] = useState<"all" | "todo" | "done">("all");
++  const [nearby, setNearby] = useState(false);
++  const [myPosition, setMyPosition] = useState<{lat:number;lng:number} | null>(null);
++  const [geoLoading, setGeoLoading] = useState(false);
++  const [geoMessage, setGeoMessage] = useState("");
++  const [routeMode, setRouteMode] = useState<DirectionsMode>("walking");
++  /* ===== 일정에서 경비 추가 시 전달할 ID (저장 이후 초기화) ===== */
++  const [expenseFromStop, setExpenseFromStop] = useState<string | null>(null);
++
+   // ===== 선택된 여행 날짜 =====
+   const [selectedDay, setSelectedDay] = useState(16);
+ 
+@@ -727,6 +761,40 @@ function App() {
+     [days],
+   );
+ 
++  /* ===== 방문 필터 및 위치순 정렬: 위치 정보는 기기 내 메모리에만 보관 ===== */
++  const visiblePlaces = useMemo(() => {
++    const filtered = mapCollection.filter((place) =>
++      savedFilter === "all" ||
++      (savedFilter === "done" ? visited.includes(place.id) : !visited.includes(place.id))
++    );
++    if (!nearby || !myPosition) return filtered;
++    return filtered.filter((place) =>
++      place.mapLocation && Number.isFinite(place.mapLocation.lat) && Number.isFinite(place.mapLocation.lng)
++    ).sort((a, b) =>
++      distanceMeters(myPosition, a.mapLocation!) - distanceMeters(myPosition, b.mapLocation!)
++    );
++  }, [mapCollection, visited, savedFilter, nearby, myPosition]);
++
++  function toggleNearby() {
++    if (nearby) { setNearby(false); return; }
++    if (myPosition) { setNearby(true); return; }
++    if (!navigator.geolocation) { setGeoMessage("이 브라우저는 위치 확인을 지원하지 않아."); return; }
++    setGeoLoading(true);
++    setGeoMessage("");
++    navigator.geolocation.getCurrentPosition(
++      (pos) => {
++        setMyPosition({lat:pos.coords.latitude, lng:pos.coords.longitude});
++        setGeoLoading(false);
++        setNearby(true);
++      },
++      (err) => {
++        setGeoLoading(false);
++        setGeoMessage(err.code === 1 ? "위치 권한이 거부됐어. 브라우저 설정에서 허용해 줘." : "현재 위치를 가져오지 못했어. 다시 시도해 줘.");
++      },
++      {enableHighAccuracy: true, timeout: 12000, maximumAge: 30000}
++    );
++  }
++
+   // ===== 홈 화면에도 표시할 전체 지출 합계 (AUD) =====
+   const totalExpense = useMemo(
+     () => expenses.reduce((sum, expense) => sum + expense.amountCents, 0) / 100,
+@@ -1107,6 +1175,29 @@ function App() {
+                   )}
+ 
+                   <small>{s.detail}</small>
++
++                  {/* ===== 일정에서 경비 합계·직접 등록·Google 길찾기 ===== */}
++                  {tab === "plan" && (
++                    <span className="trip-stop-tools">
++                      {expenses.some((e) => e.stopId === s.id) && (
++                        <span className="trip-stop-spent">
++                          사용 A${(expenses.filter((e) => e.stopId === s.id)
++                            .reduce((sum, e) => sum + e.amountCents, 0) / 100).toFixed(2)}
++                        </span>
++                      )}
++                      <button type="button" onClick={() => {
++                        setExpenseFromStop(s.id);
++                        setTab("money");
++                      }}>경비 추가</button>
++                      {getDirectionsUrl(s, routeMode) && (
++                        <a href={getDirectionsUrl(s, routeMode)!}
++                           target="_blank" rel="noopener noreferrer"
++                           onClick={(e) => e.stopPropagation()}>
++                          길찾기
++                        </a>
++                      )}
++                    </span>
++                  )}
+                 </span>
+ 
+                 {/* ===== 홈 화면에서만 화살표 표시 ===== */}
+@@ -1313,6 +1404,9 @@ function App() {
+         {tab === "money" && (
+           <ExpenseTracker
+             expenses={expenses}
++            itineraryDays={days}
++            initialStopId={expenseFromStop}
++            onInitialStopConsumed={() => setExpenseFromStop(null)}
+             // ===== 새로운 지출 등록 =====
+             onAddExpense={(expense) => {
+               void addSharedExpense(expense).catch((error: Error) => {
+@@ -1395,21 +1489,45 @@ function App() {
+             <section className="block-section">
+               <SectionTitle
+                 eyebrow="PLACES FROM OUR TRIP"
+-                title={`지도 컬렉션 · ${mapCollection.length}`}
++                title={`지도 컬렉션 · ${visiblePlaces.length}`}
+               />
+ 
+               {/* ===== 등록된 모든 위치를 지도에 핀으로 표시 ===== */}
+-              <MapCollection places={mapCollection} />
++              {/* ===== 전체 / 미방문 / 완료 / 내 주변 + 길찾기 방법 ===== */}
++              <div className="trip-saved-controls">
++                <div className="trip-saved-filter">
++                  {([['all','전체'],['todo','미방문'],['done','완료']] as const).map(([value,label]) => (
++                    <button key={value} type="button"
++                      className={savedFilter === value ? 'active' : ''}
++                      onClick={() => setSavedFilter(value)}>{label}</button>
++                  ))}
++                </div>
++                <div className="trip-saved-extra">
++                  <button type="button" className={nearby ? 'active' : ''}
++                    disabled={geoLoading} onClick={toggleNearby}>
++                    <MapPin size={14} /> {geoLoading ? '위치 확인 중...' : nearby ? '내 주변 ON' : '내 주변 거리순'}
++                  </button>
++                  <label>길찾기
++                    <select value={routeMode} onChange={(e) => setRouteMode(e.target.value as DirectionsMode)}>
++                      <option value="walking">도보</option>
++                      <option value="transit">대중교통</option>
++                      <option value="driving">자동차</option>
++                    </select>
++                  </label>
++                </div>
++                {geoMessage && <small role="status">{geoMessage}</small>}
++                {nearby && <small>직선거리 순서야. 실제 도로 이동시간과는 달라.</small>}
++              </div>
++              <MapCollection places={visiblePlaces} visited={visited} routeMode={routeMode} />
+ 
+               {/* ===== 지도에 연결된 일정 목록 ===== */}
+               <div className="place-list">
+-                {mapCollection.length === 0 ? (
++                {visiblePlaces.length === 0 ? (
+                   <p className="map-empty">
+-                    아직 등록된 위치가 없어. 일정에서 지도 위치를 선택하면
+-                    자동으로 나타나.
++                    조건에 맞는 장소가 없어. 위치가 없는 일정은 내 주변 모드에서 제외돼.
+                   </p>
+                 ) : (
+-                  mapCollection.map((place) => {
++                  visiblePlaces.map((place) => {
+                     // ===== 해당 장소의 Google Maps 링크 =====
+                     const url = getGoogleMapsUrl(place);
+ 
+@@ -1423,6 +1541,7 @@ function App() {
+                         {/* ===== 장소명 및 여행 날짜 ===== */}
+                         <div className="place-name">
+                           <span>DEC {place.day} · 2026</span>
++                          {visited.includes(place.id) && <span className="trip-visited-tag">방문 완료</span>}
+ 
+                           {/* ===== 장소 이름을 누르면 Google Maps 열기 ===== */}
+                           <strong>
+@@ -1444,18 +1563,25 @@ function App() {
+                             {place.mapLocation?.address ||
+                               place.detail ||
+                               "지도 위치 등록됨"}
++                          {nearby && myPosition && place.mapLocation && (
++                            <span> · 직선거리 {formatDistance(distanceMeters(myPosition, place.mapLocation))}</span>
++                          )}
+                           </small>
+                         </div>
+ 
+-                        {/* ===== Google Maps에서 열기 ===== */}
+-                        {url && (
+-                          <a
+-                            className="map-collection-link"
+-                            href={url}
+-                            target="_blank"
+-                            rel="noopener noreferrer"
+-                            aria-label={`${place.name} 지도 열기`}
+-                          >
++                        {/* ===== 방문 체크: 기존 Firebase 방문 상태 재사용 ===== */}
++                        <button type="button" className="trip-visit-action"
++                          aria-label={`${place.name} 방문 상태 변경`}
++                          aria-pressed={visited.includes(place.id)}
++                          onClick={() => toggleVisited(place.id)}>
++                          <Check size={17} />
++                        </button>
++                        {/* ===== 무료 Google Maps 길찾기 URL: 좌표가 있어야 정확 ===== */}
++                        {getDirectionsUrl(place, routeMode) && (
++                          <a className="map-collection-link"
++                            href={getDirectionsUrl(place, routeMode)!}
++                            target="_blank" rel="noopener noreferrer"
++                            aria-label={`${place.name} 길찾기`}>
+                             <Navigation size={18} />
+                           </a>
+                         )}
+diff --git a/src/components/ExpenseTracker.tsx b/src/components/ExpenseTracker.tsx
+index fb79dbd..49ee4fa 100644
+--- a/src/components/ExpenseTracker.tsx
++++ b/src/components/ExpenseTracker.tsx
+@@ -44,13 +44,24 @@ export type Expense = {
+   category: ExpenseCategory;
+   mode: ExpenseMode;
+   createdAt: string;
++  stopId?: string | null; // ===== 연결된 일정 ID (선택사항) =====
+ };
+ 
+ // ===== 경비 화면 컴포넌트에 전달할 값 =====
+ 
++type PickerDay = {
++  day: number;
++  weekday: string;
++  title: string;
++  stops: { id: string; time: string; name: string; detail: string }[];
++};
++
+ // ===== 부모 App.tsx에서 전달받는 경비 기능 =====
+ type ExpenseTrackerProps = {
+   expenses: Expense[];
++  itineraryDays: PickerDay[];
++  initialStopId?: string | null;
++  onInitialStopConsumed?: () => void;
+ 
+   // ===== 신규 등록 =====
+   onAddExpense: (expense: Expense) => void;
+@@ -151,6 +162,9 @@ type FxRate = {
+ // ===== 공동 경비 메인 화면 =====
+ export default function ExpenseTracker({
+   expenses,
++  itineraryDays,
++  initialStopId,
++  onInitialStopConsumed,
+   onAddExpense,
+   onUpdateExpense,
+   onDeleteExpense,
+@@ -158,6 +172,11 @@ export default function ExpenseTracker({
+ 
+   // ===== 지출 입력창 =====
+   const [showModal, setShowModal] = useState(false);
++  const [linkedStopId, setLinkedStopId] = useState<string | null>(null);
++  const [showStopPicker, setShowStopPicker] = useState(false);
++  const [pickerDay, setPickerDay] = useState(16);
++  const linkedStop = itineraryDays.flatMap((d) => d.stops.map((s) => ({...s, day:d.day})))
++    .find((s) => s.id === linkedStopId);
+   // ===== 최종 정산 상세창 열림 / 닫힘 =====
+ const [showSettlement, setShowSettlement] = useState(false);
+ 
+@@ -198,6 +217,18 @@ const expenseSwipeStart = useRef<{
+     "loading",
+   );
+ 
++  // ===== 일정 카드의 '경비 추가'에서 진입하면 연결된 지출 창 자동 열기 =====
++  useEffect(() => {
++    if (!initialStopId) return;
++    resetForm();
++    setLinkedStopId(initialStopId);
++    setEditingExpense(null);
++    setShowStopPicker(false);
++    setShowModal(true);
++    onInitialStopConsumed?.();
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [initialStopId]);
++
+   // ===== 최신 발표 기준환율 불러오기 =====
+   useEffect(() => {
+     const controller = new AbortController();
+@@ -372,6 +403,8 @@ const expenseSwipeStart = useRef<{
+     setParticipants([...PEOPLE]);
+     setPersonalOwner("정세은");
+     setFormError("");
++    setLinkedStopId(null);
++    setShowStopPicker(false);
+   }
+ 
+   // ===== 새 지출 입력 시작 =====
+@@ -388,6 +421,7 @@ function openAddModal() {
+ function openEditModal(expense: Expense) {
+   // ===== 수정할 기록 보관 =====
+   setEditingExpense(expense);
++  setLinkedStopId(expense.stopId ?? null);
+ 
+   // ===== 기존 입력값 모두 복원 =====
+   setTitle(expense.title);
+@@ -465,6 +499,7 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
+     payer,
+     mode,
+     participants: finalParticipants,
++    stopId: linkedStopId,
+   };
+ 
+   if (editingExpense) {
+@@ -828,6 +863,10 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
+             <strong>{expense.title}</strong>
+ 
+             <small>결제 {expense.payer}</small>
++            {expense.stopId && (
++              <small>일정 · {itineraryDays.flatMap((d) => d.stops.map((s) => ({...s,day:d.day})))
++                .find((s) => s.id === expense.stopId)?.name ?? '삭제된 일정'}</small>
++            )}
+ 
+             <small>
+               참여 {expense.participants.join(", ")}
+@@ -954,6 +993,27 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
+                 </label>
+               </div>
+ 
++              {/* ===== 선택사항: 일정 선택 화면을 별도 열어 연결 ===== */}
++              <div className="trip-exp-link">
++                <div className="trip-exp-link-heading">
++                  <strong>일정 연결</strong><small>선택사항</small>
++                </div>
++                {linkedStopId && (
++                  <div className="trip-exp-chosen">
++                    <span>{linkedStop ? `12월 ${linkedStop.day}일 · ${linkedStop.time} ${linkedStop.name}` : '연결된 일정이 삭제됨'}</span>
++                    <button type="button" onClick={() => setLinkedStopId(null)}>해제</button>
++                  </div>
++                )}
++                <button type="button" className="trip-exp-picker-button"
++                  onClick={() => {
++                    const linkedDay = itineraryDays.find((d) => d.stops.some((s) => s.id === linkedStopId));
++                    setPickerDay(linkedDay?.day ?? 16);
++                    setShowStopPicker(true);
++                  }}>
++                  {linkedStopId ? '다른 일정 선택하기' : '일정과 연결하기'}
++                </button>
++              </div>
++
+               {/* ===== N빵 / 개인 지출 선택 ===== */}
+               <div className="exp-split-section">
+                 <span className="exp-field-title">비용 구분</span>
+@@ -1060,6 +1120,46 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
+           </section>
+         </div>
+       )}
++
++      {/* ===== 기존 일정 화면과 같은 날짜 칩·일정 카드 구성의 전체 화면 선택창 ===== */}
++      {showStopPicker && (
++        <div className="trip-exp-picker-overlay" role="dialog" aria-modal="true" aria-label="연결할 일정 선택">
++          <div className="trip-exp-picker-page">
++            <div className="trip-exp-picker-head">
++              <div><span>SELECT AN ITINERARY</span><h2>일정 선택</h2></div>
++              <button type="button" onClick={() => setShowStopPicker(false)} aria-label="돌아가기">✕</button>
++            </div>
++            <div className="date-strip" aria-label="날짜 선택">
++              {itineraryDays.map((d) => (
++                <button type="button" key={d.day}
++                  className={`date-chip ${pickerDay === d.day ? 'active' : ''}`}
++                  onClick={() => setPickerDay(d.day)}>
++                  <span>{d.weekday}</span><strong>{d.day}</strong>
++                </button>
++              ))}
++            </div>
++            <div className="day-summary detail">
++              <div><span>DEC {pickerDay} · 2026</span>
++                <h3>{itineraryDays.find((d) => d.day === pickerDay)?.title}</h3>
++                <p>연결할 장소를 눌러줘.</p>
++              </div>
++            </div>
++            <div className="trip-exp-picker-list">
++              {(itineraryDays.find((d) => d.day === pickerDay)?.stops ?? []).map((s) => (
++                <button key={s.id} type="button" className="trip-exp-picker-stop"
++                  onClick={() => {setLinkedStopId(s.id); setShowStopPicker(false);}}>
++                  <span className="trip-exp-picker-time">{s.time}</span>
++                  <span className="trip-exp-picker-desc"><strong>{s.name}</strong><small>{s.detail}</small></span>
++                  <span aria-hidden="true">›</span>
++                </button>
++              ))}
++            </div>
++            <button type="button" className="trip-exp-picker-back" onClick={() => setShowStopPicker(false)}>
++              경비 입력으로 돌아가기
++            </button>
++          </div>
++        </div>
++      )}
+     </div>
+   );
+ }
+diff --git a/src/components/MapCollection.tsx b/src/components/MapCollection.tsx
+index f9069c8..3cda085 100644
+--- a/src/components/MapCollection.tsx
++++ b/src/components/MapCollection.tsx
+@@ -1,127 +1,56 @@
+-
+ import { useEffect, useRef } from "react";
+ import L from "leaflet";
+ import "leaflet/dist/leaflet.css";
+ import type { MapLocation } from "./MapPicker";
+ 
+-// ===== 일정에서 수집된 지도 위치 데이터 =====
+ type CollectionPlace = {
+   id: string;
+   day: number;
+   name: string;
+   mapLocation?: MapLocation;
+ };
++type Mode = "walking" | "transit" | "driving";
+ 
+-// ===== 지도 컬렉션: 저장된 위치를 모두 표시 =====
++/* ===== 방문 여부가 지도에 표시되는 공동 장소 지도 ===== */
+ export default function MapCollection({
+-  places,
+-}: {
+-  places: CollectionPlace[];
+-}) {
+-  const mapElement = useRef<HTMLDivElement | null>(
+-    null
+-  );
+-
+-  // ===== 저장된 장소가 변경되면 지도 갱신 =====
++  places, visited, routeMode,
++}: { places: CollectionPlace[]; visited: string[]; routeMode: Mode }) {
++  const mapElement = useRef<HTMLDivElement | null>(null);
+   useEffect(() => {
+     if (!mapElement.current) return;
+-
+-    const map = L.map(mapElement.current, {
+-      scrollWheelZoom: false,
+-    }).setView(
+-      [-33.8688, 151.2093],
+-      11
+-    );
+-
+-    // ===== OpenStreetMap 지도 배경 =====
+-    L.tileLayer(
+-      "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+-      {
+-        maxZoom: 19,
+-        attribution:
+-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+-      }
+-    ).addTo(map);
+-
+-    // ===== 저장된 좌표 모음 =====
++    const map = L.map(mapElement.current, {scrollWheelZoom: false})
++      .setView([-33.8688, 151.2093], 11);
++    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
++      maxZoom: 19,
++      attribution: "© OpenStreetMap contributors",
++    }).addTo(map);
+     const bounds: L.LatLngExpression[] = [];
+-
+     for (const place of places) {
+-      const location = place.mapLocation;
+-
+-      // ===== 좌표가 없는 기존 링크 일정은 지도 핀 제외 =====
+-      if (!location) continue;
+-
+-      const point: L.LatLngExpression = [
+-        location.lat,
+-        location.lng,
+-      ];
+-
++      const loc = place.mapLocation;
++      if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) continue;
++      const done = visited.includes(place.id);
++      const point: L.LatLngExpression = [loc.lat, loc.lng];
+       bounds.push(point);
+-
+-      // ===== 장소마다 지도 핀 추가 =====
+-      const pin = L.circleMarker(point, {
+-        radius: 8,
+-        color: "#fff",
+-        weight: 2,
+-        fillColor: "#526448",
+-        fillOpacity: 1,
+-      }).addTo(map);
+-
+-      // ===== 핀에 날짜와 장소명 표시 =====
+-      const label = document.createElement(
+-        "span"
+-      );
+-
+-      label.textContent =
+-        `12월 ${place.day}일 · ${place.name}`;
+-
+-      pin.bindTooltip(label);
+-
+-      // ===== 핀을 누르면 Google Maps 열기 =====
+-      pin.on("click", () => {
+-        const coordinates =
+-          `${location.lat},${location.lng}`;
+-
+-        const url =
+-          "https://www.google.com/maps/search/?api=1&query=" +
+-          encodeURIComponent(coordinates);
+-
+-        window.open(
+-          url,
+-          "_blank",
+-          "noopener,noreferrer"
+-        );
++      // ===== 완료=체크 핀, 미완료=일반 핀 =====
++      const pin = L.divIcon({
++        className: "trip-collection-icon",
++        html: `<span class="${done ? "completed" : "pending"}">${done ? "✓" : "•"}</span>`,
++        iconSize: [28, 28], iconAnchor: [14, 14],
++      });
++      const marker = L.marker(point, {icon: pin}).addTo(map);
++      const tooltip = document.createElement("span");
++      tooltip.textContent = `12월 ${place.day}일 · ${place.name} · ${done ? "방문 완료" : "미방문"}`;
++      marker.bindTooltip(tooltip);
++      marker.on("click", () => {
++        const dest = encodeURIComponent(`${loc.lat},${loc.lng}`);
++        window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=${routeMode}`,
++          "_blank", "noopener,noreferrer");
+       });
+     }
+-
+-    // ===== 등록된 장소가 한 개일 때 =====
+-    if (bounds.length === 1) {
+-      map.setView(bounds[0], 15);
+-    }
+-
+-    // ===== 등록된 장소가 여러 개일 때 =====
+-    else if (bounds.length > 1) {
+-      map.fitBounds(
+-        L.latLngBounds(bounds),
+-        {
+-          padding: [25, 25],
+-          maxZoom: 15,
+-        }
+-      );
+-    }
+-
+-    // ===== 기존 지도 제거 및 리소스 정리 =====
+-    return () => {
+-      map.remove();
+-    };
+-  }, [places]);
+-
+-  return (
+-    <div
+-      className="map-collection-map"
+-      ref={mapElement}
+-      aria-label="여행 장소 지도"
+-    />
+-  );
++    if (bounds.length === 1) map.setView(bounds[0], 15);
++    if (bounds.length > 1) map.fitBounds(L.latLngBounds(bounds), {padding:[25,25], maxZoom:15});
++    const timer = window.setTimeout(() => map.invalidateSize(), 0);
++    return () => {window.clearTimeout(timer); map.remove();};
++  }, [places, visited, routeMode]);
++  return <div className="map-collection-map" ref={mapElement} aria-label="방문 완료 여부가 표시된 여행 장소 지도" />;
+ }
+diff --git a/src/expense-tracker.css b/src/expense-tracker.css
+index 28401a5..ac56218 100644
+--- a/src/expense-tracker.css
++++ b/src/expense-tracker.css
+@@ -750,3 +750,31 @@
+     transition: none;
+   }
+ }
++
++/* ===== FOUR FEATURES: 경비와 일정 선택형 연결 ===== */
++.trip-exp-link {margin:2px 0 19px;display:grid;gap:9px;}
++.trip-exp-link-heading {display:flex;justify-content:space-between;align-items:center;color:#4c5845;font-size:12px;}
++.trip-exp-link-heading small {color:#8a9286;}
++.trip-exp-chosen {display:flex;align-items:center;gap:8px;background:#e9eee4;
++  border-radius:10px;padding:9px;font-size:12px;color:#4e6046;}
++.trip-exp-chosen span {flex:1;overflow-wrap:anywhere;}
++.trip-exp-chosen button {border:0;background:transparent;color:#6f5840;font-weight:700;}
++.trip-exp-picker-button {width:100%;border:1px solid #cbd8c1;background:#fff;
++  color:#536a49;border-radius:11px;padding:13px;font-size:13px;font-weight:800;}
++.trip-exp-picker-overlay {position:fixed;inset:0;z-index:200;
++  display:flex;justify-content:center;background:#f6f5f1;overflow-y:auto;}
++.trip-exp-picker-page {width:min(100%, 550px);padding:calc(20px + env(safe-area-inset-top)) 20px
++  calc(30px + env(safe-area-inset-bottom));box-sizing:border-box;}
++.trip-exp-picker-head {display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
++.trip-exp-picker-head span {font-size:10px;letter-spacing:.15em;color:#819077;}
++.trip-exp-picker-head h2 {margin:3px 0;font-size:27px;color:#34402f;}
++.trip-exp-picker-head button {background:white;border:1px solid #dde4d7;border-radius:50%;width:37px;height:37px;}
++.trip-exp-picker-list {display:grid;gap:0;margin:16px 0 20px;}
++.trip-exp-picker-stop {width:100%;display:flex;align-items:center;gap:13px;text-align:left;
++  border:0;border-bottom:1px solid #dde2d8;background:transparent;padding:13px 4px;color:#384234;}
++.trip-exp-picker-time {width:56px;flex-shrink:0;font-size:12px;color:#8b9384;font-weight:800;}
++.trip-exp-picker-desc {flex:1;display:grid;gap:5px;min-width:0;}
++.trip-exp-picker-desc strong {font-size:13px;}
++.trip-exp-picker-desc small {font-size:11px;color:#8c9387;}
++.trip-exp-picker-back {width:100%;padding:13px;border-radius:12px;background:#637456;
++  color:white;border:0;font-weight:800;}
+diff --git a/src/index.css b/src/index.css
+index 5fb4063..3233e60 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -1529,3 +1529,32 @@ color: #282B26;
+   outline-offset: 3px;
+   border-radius: 3px;
+ }
++
++/* ===== FOUR FEATURES: 저장 필터·길찾기·방문·일정 경비 ===== */
++.trip-saved-controls { display:grid; gap:10px; margin:14px 0; }
++.trip-saved-filter, .trip-saved-extra { display:flex; gap:7px; flex-wrap:wrap; align-items:center; }
++.trip-saved-filter button, .trip-saved-extra button, .trip-saved-extra select {
++  border:1px solid #d5dacd; border-radius:10px; padding:9px 12px;
++  background:white; color:#59674f; font-size:12px; font-weight:700;
++}
++.trip-saved-filter button.active, .trip-saved-extra button.active {background:#626f52;color:white;}
++.trip-saved-extra button {display:flex;align-items:center;gap:5px;}
++.trip-saved-extra label {display:flex;align-items:center;gap:6px;font-size:12px;color:#626f52;}
++.trip-saved-controls small {color:#737d6e;font-size:11px;}
++.trip-collection-icon {background:transparent;border:none;}
++.trip-collection-icon span {display:grid;place-items:center;width:28px;height:28px;
++  border-radius:50%;border:2px solid white;box-sizing:border-box;
++  font-size:17px;font-weight:900;box-shadow:0 2px 9px #0003;}
++.trip-collection-icon .completed {background:#506b44;color:white;}
++.trip-collection-icon .pending {background:#c5a78a;color:#533d2b;}
++.trip-visit-action {display:grid;place-items:center;flex:0 0 30px;height:30px;
++  background:#f2f3ec;color:#78846e;border:1px solid #d5dacd;border-radius:50%;}
++.trip-visit-action[aria-pressed="true"] {background:#526b48;color:white;border-color:#526b48;}
++.trip-visited-tag {color:#526b48!important;letter-spacing:0!important;font-size:10px!important;}
++.trip-stop-tools {display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px;}
++.trip-stop-tools button,.trip-stop-tools a {font-size:11px!important;color:#536a47;
++  border:1px solid #d6dfcf;border-radius:8px;padding:5px 7px;background:white;
++  text-decoration:none;font-weight:700;}
++.trip-stop-spent {color:#795a3d;font-size:11px;font-weight:800;}
++.place-row {gap:8px;}
++.place-name {overflow-wrap:anywhere;}

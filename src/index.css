@@ -376,7 +376,7 @@ svg {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 2px 0 10px;
+  padding: 2px 0 2px;
   scrollbar-width: none;
   margin-right: -21px;
   padding-right: 21px;
@@ -387,24 +387,24 @@ svg {
 .date-chip {
   border: 1px solid transparent;
   background: #eeede7;
-  min-width: 47px;
-  height: 65px;
+  min-width: 40px;
+  height: 55px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 1px;
   border-radius: 14px;
   color: #8a8c82;
   flex-shrink: 0;
 }
 .date-chip span {
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 800;
   letter-spacing: 0.04em;
 }
 .date-chip strong {
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 800;
 }
 .date-chip.active {
@@ -426,12 +426,12 @@ svg {
   font-size: 9px;
 }
 .day-summary h3 {
-  margin: 4px 0 3px;
+  margin: 0px 0 4px;
   font-size: 21px;
   letter-spacing: -0.04em;
 }
 .day-summary p {
-  font-size: 11px;
+  font-size: 10px;
   color: #8c8e81;
   margin: 0;
 }
@@ -441,7 +441,7 @@ svg {
   align-items: center;
   justify-content: center;
   border: 1px solid #e6e6df;
-  padding: 9px;
+  padding: 6px;
   border-radius: 20px;
   white-space: nowrap;
   font-size: 11px;
@@ -458,9 +458,9 @@ svg {
   border: 0;
   background: none;
   padding: 0 0 0 2px;
-  min-height: 72px;
+  min-height: 60px;
   align-items: stretch;
-  color: #343a2e;
+  color: #282b26;
 }
 .stop-rail {
   position: relative;
@@ -474,7 +474,7 @@ svg {
   height: 20px;
   width: 20px;
   background: #f6f5f1;
-  border: 2px solid #cdd3c6;
+  border: 2px solid #626f52;
   border-radius: 50%;
   flex-shrink: 0;
   display: grid;
@@ -489,8 +489,8 @@ svg {
 }
 .rail-line {
   height: 100%;
-  width: 1px;
-  background: #d5d8cd;
+  width: 2px;
+  background: #626f52;
   position: absolute;
   top: 21px;
   bottom: -1px;
@@ -498,9 +498,9 @@ svg {
 .stop-time {
   width: 51px;
   flex-shrink: 0;
-  padding-top: 3px;
-  color: #949989;
-  font-size: 11px;
+  padding-top: 5px;
+  color:  #282b26;
+  font-size: 10px;
   font-weight: 800;
 }
 .stop-copy {
@@ -512,13 +512,13 @@ svg {
   min-width: 0;
 }
 .stop-copy strong {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
 }
 .stop-copy small {
-  font-size: 11px;
-  color: #8d9086;
-  line-height: 1.4;
+  font-size: 9px;
+  color: #6c7459;
+  line-height: 0.3;
 }
 .stop-row.visited .stop-copy strong {
   text-decoration: line-through;
@@ -1996,4 +1996,204 @@ width: 50px;
 .stop-copy > small {
   display: block;
   margin-top: 4px;
+}
+
+
+/* ===== 맨 아래 작은 복사 버튼 ===== */
+.plan-copy-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+
+.plan-copy-button {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 9px;
+  border: 1px solid #d8ded1;
+  border-radius: 7px;
+  background: transparent;
+  color: #87917e;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.plan-copy-button:active {
+  background: #e5e9db;
+}
+
+/* 작은 일정 복사 버튼 */
+.plan-copy-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.plan-copy-actions button {
+  width: fit-content !important;
+  min-width: 0;
+  flex: 0 0 auto;
+  padding: 5px 8px !important;
+  font-size: 10px !important;
+  font-weight: 400;
+  border: 1px solid #d8ded1;
+  border-radius: 6px;
+  background: transparent;
+  color: #87917e;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+
+/* ===== 날짜 제목 오른쪽 버튼 정렬 ===== */
+.day-summary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+/* 경비 탭의 플러스 버튼 스타일 재사용 */
+.day-summary-actions .exp-add-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+
+/* ===== 날짜별 지도 버튼 위치 ===== */
+.plan-map-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.plan-map-top-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  width: auto;
+  padding: 7px 10px;
+
+  border: 1px solid #dce4d5;
+  border-radius: 9px;
+
+  background: #f0f2eb;
+  color: #526448;
+
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.plan-map-top-button:active {
+  background: #e5e9db;
+}
+
+/* ===== 저장된 장소 가져오기 ===== */
+
+.saved-place-import {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.saved-place-import-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #dce4d5;
+  border-radius: 11px;
+  background: #f0f2eb;
+  color: #526448;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saved-place-import-toggle span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.saved-place-import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #e1e4da;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.saved-place-import-panel input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 16px;
+}
+
+.saved-place-import-results {
+  max-height: 180px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.saved-place-import-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 1px solid #f0f1ed;
+  background: transparent;
+  color: #343a2e;
+  text-align: left;
+  cursor: pointer;
+}
+
+.saved-place-import-option:last-child {
+  border-bottom: 0;
+}
+
+.saved-place-import-option strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.saved-place-import-option small {
+  font-size: 10px;
+  line-height: 1.4;
+  color: #92988d;
+  overflow-wrap: anywhere;
+}
+
+.saved-place-import-option:active {
+  background: #f3f5ee;
+}
+
+.saved-place-import-empty {
+  margin: 0;
+  padding: 12px 8px;
+  color: #92988d;
+  font-size: 12px;
 }

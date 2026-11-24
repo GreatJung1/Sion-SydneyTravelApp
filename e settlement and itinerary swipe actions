@@ -1,0 +1,9 @@
+ src/App.tsx                        |  420 [32m+++++[m[31m-[m
+ src/components/DailyRouteMap.tsx   |  279 [32m++++[m
+ src/components/ExpenseTracker.tsx  | 2715 [32m++++++++++++++++++++++[m[31m--------------[m
+ src/components/MapCollection.tsx   |  141 [32m+[m[31m-[m
+ src/components/daily-route-map.css |   95 [32m++[m
+ src/expense-tracker.css            |  383 [32m+++++[m
+ src/index.css                      |  410 [32m++++++[m
+ src/tripCloud.ts                   |   47 [32m+[m[31m-[m
+ 8 files changed, 3269 insertions(+), 1221 deletions(-)

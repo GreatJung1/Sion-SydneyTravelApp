@@ -92,7 +92,7 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding: 13px 10px;
+  padding: 10px 12px;
   border: 1px solid #e5e8df;
   border-radius: 13px;
   background: #ffffff;
@@ -587,15 +587,15 @@
   padding: 4px 0;
   border: none;
   background: transparent;
-  color: #848b7a;
-  font-size: 11px;
+  color: #626f52;
+  font-size: 10px;
   font-weight: 600;
   cursor: pointer;
 }
 
 /* ===== 버튼의 오른쪽 화살표 ===== */
 .exp-settlement-link span {
-  font-size: 17px;
+  font-size: 14px;
   line-height: 1;
 }
 
@@ -875,7 +875,7 @@
 .exp-status-filters::-webkit-scrollbar { display: none; }
 .exp-status-filters button {
   flex-shrink: 0;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border: 1px solid #d7dfd1;
   border-radius: 999px;
   background: rgba(255,255,255,.55);

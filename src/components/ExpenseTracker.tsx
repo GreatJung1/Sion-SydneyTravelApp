@@ -1171,8 +1171,8 @@ function handleSubmit(event: FormEvent<HTMLFormElement>) {
         {/* ===== 정산 상태별 필터: 목록만 바꾸며 총경비는 유지 ===== */}
         <div className="exp-status-filters">
           {([
-            ["all", "전체"], ["unsettled", "정산 필요"],
-            ["complete", "정산 완료"], ["unreviewed", "확인 필요"],
+            ["all", "전체"], ["unsettled", "미정산"],
+            ["complete", "정산 완료"], ["unreviewed", "기타"],
           ] as const).map(([value, label]) => (
             <button key={value} type="button"
               className={expenseFilter === value ? "active" : ""}
