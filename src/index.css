@@ -144,7 +144,7 @@ svg {
 .intro h1 em {
   font-family: "East Sea Dokdo", cursive;
   font-family: "Black Han Sans", sans-serif;
-  font-size: 75px;
+  font-size: 70px;
   font-weight: 100;
   font-style: normal;
   letter-spacing: -0.05em;
@@ -1083,7 +1083,9 @@ svg {
   width: 100%;
   height: auto;
   min-height: 0;
-  padding: 18px;
+  padding: 20px;
+  padding-top: 15px;
+  padding-bottom: 15px;
   border-radius: 22px;
   background: #343a32;
   color: #fff;
@@ -1104,11 +1106,13 @@ svg {
 /* 상단 제목 글씨 */
 .weather-card .hero-top span {
   font-size: 10px;
+  padding-bottom: 2px;
 }
 
 /* D-day */
 .weather-card .hero-count {
   font-size: 10px;
+  align-items: center;
 }
 
 /* 현재 기온 영역 */
@@ -1116,16 +1120,16 @@ svg {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 12px 0 10px;
+  margin: 4px 0 10px;
 }
 
 /* ===== 현재 시드니 기온 (19°) ===== */
 .weather-temperature {
   font-family: "DM Sans", sans-serif;
   font-size: 50px; /* 기존 50px → 70px */
+  margin-left: 10px;
   font-weight: 600;
   line-height: 1;
-  letter-spacing: -3px;
 }
 
 /* 현재 기온 아래 설명 */
@@ -1134,6 +1138,7 @@ svg {
   align-items: center;
   gap: 8px;
   margin-top: 5px;
+  margin-left: 10px;
   font-size: 11px;
   color: #e2e7d9;
 }
@@ -1144,7 +1149,7 @@ svg {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border-top: 1px solid #687563;
   padding-top: 10px;
-  gap: 5px;
+
 }
 
 /* 각 날짜의 예보 */
@@ -1159,7 +1164,7 @@ svg {
 
 /* 오늘, 내일, 모레 글씨 */
 .weather-day > span {
-  font-size: 9px;
+  font-size: 8px;
   color: #ced8c6;
 }
 
@@ -1172,7 +1177,7 @@ svg {
 
 /* 강수확률 */
 .weather-day small {
-  font-size: 9px;
+  font-size: 8px;
   color: #b8c7ae;
 }
 
