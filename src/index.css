@@ -387,7 +387,7 @@ svg {
 .date-chip {
   border: 1px solid transparent;
   background: #eeede7;
-  min-width: 40px;
+  min-width: 46px;
   height: 55px;
   display: flex;
   flex-direction: column;
