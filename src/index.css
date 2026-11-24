@@ -1303,7 +1303,7 @@ color: #282B26;
   overflow-y: auto;
 }
 
-/* ===== 일정 한 줄: 스와이프 영역 ===== *
+/* ===== 일정 한 줄: 스와이프 영역 ===== */
 
 .stop-swipe {
   position: relative;
@@ -2407,12 +2407,12 @@ width: 50px;
   padding: 1px 1px;
   white-space: nowrap;
 
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.15px;
 
-  color: #9ba696;
+  color: #7c8875;
   background: #f6f5f1;
 
   pointer-events: none;
