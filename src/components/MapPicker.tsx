@@ -34,6 +34,42 @@ type MapPickerProps = {
 
 const SYDNEY: [number, number] = [-33.8688, 151.2093];
 
+
+async function translateToEnglish(text: string): Promise<string> {
+  // 한국어가 없으면 번역 없이 그대로 사용
+  if (!/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(text)) {
+    return text;
+  }
+
+  const params = new URLSearchParams({
+    q: text,
+    langpair: "ko|en",
+  });
+
+  const response = await fetch(
+    `https://api.mymemory.translated.net/get?${params.toString()}`
+  );
+
+  if (!response.ok) {
+    throw new Error("번역 요청 실패");
+  }
+
+  const data = await response.json();
+
+  const translated = data.responseData?.translatedText;
+
+  if (
+    data.responseStatus !== 200 ||
+    typeof translated !== "string" ||
+    !translated.trim()
+  ) {
+    throw new Error("번역 실패 또는 무료 한도 초과");
+  }
+
+  return translated.trim();
+}
+
+
 // ===== 지도에서 장소 검색 또는 직접 핀 선택 =====
 export default function MapPicker({
   initialQuery,
@@ -160,12 +196,27 @@ export default function MapPicker({
 
     try {
       // ===== 시드니 중심으로 장소 검색 =====
+      
+      // ===== 한국어 입력 시 영어로 자동 번역 =====
+      let searchText = value;
+
+      if (/[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(value)) {
+        try {
+          searchText = await translateToEnglish(value);
+        } catch (error) {
+          console.warn("영어 번역 실패:", error);
+          searchText = value;
+        }
+      }
+
+      // ===== 번역된 검색어로 시드니 주변 장소 검색 =====
       const params = new URLSearchParams({
-        q: value,
+        q: searchText,
         limit: "5",
         lat: String(SYDNEY[0]),
         lon: String(SYDNEY[1]),
       });
+
 
       const response = await fetch(
         `https://photon.komoot.io/api/?${params.toString()}`

@@ -3,7 +3,6 @@ import DailyRouteMap from "./components/DailyRouteMap";
 
 import { buildNearbyGroups } from "./itineraryGroups";
 
-
 /* ===== Firebase 공동 일정/방문/경비 동기화 ===== */
 import {
   watchSharedTrip,
@@ -39,13 +38,7 @@ import "./map-picker.css";
 
 /* ===== React 상태 및 스와이프 위치 관리 ===== */
 
-import {
-  Fragment,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import type { FormEvent, ReactNode } from "react";
 
@@ -439,38 +432,34 @@ const navItems = [
 ];
 
 // ===== 지도 좌표 또는 기존 Google Maps 링크 열기 =====
+
 function getGoogleMapsUrl(stop: Stop): string | null {
-  // ===== 선택한 핀이 있으면 좌표를 우선 사용 =====
-  if (stop.mapLocation) {
-    const { lat, lng } = stop.mapLocation;
-
-    return (
-      "https://www.google.com/maps/search/?api=1&query=" +
-      encodeURIComponent(`${lat},${lng}`)
-    );
-  }
-
-  // ===== 기존 Google Maps 링크도 지원 =====
-  if (!stop.mapUrl) return null;
-
-  try {
-    const url = new URL(stop.mapUrl);
-    const host = url.hostname.toLowerCase();
-
-    // ===== Google Maps 주소만 허용 =====
-    if (
-      url.protocol === "https:" &&
-      (host === "google.com" ||
-        host.endsWith(".google.com") ||
-        host === "maps.app.goo.gl")
-    ) {
-      return url.href;
-    }
-  } catch {
+  // 지도 연결이 없는 일정은 링크를 표시하지 않음
+  if (!stop.mapLocation && !stop.mapUrl) {
     return null;
   }
 
-  return null;
+  // 지도에서 선택한 장소 이름 우선
+  const savedName = stop.mapLocation?.name?.trim();
+
+  const placeName =
+    savedName && savedName !== "지도에서 선택한 위치"
+      ? savedName
+      : stop.name.trim();
+
+  // 주소를 추가해 동명이인 장소 검색 오류 감소
+  const address = stop.mapLocation?.address?.trim();
+
+  const prefix = /\bsydney\b/i.test(placeName) ? "" : "Sydney";
+
+  const query = [prefix, placeName, address].filter(Boolean).join(", ");
+
+  if (!query) return null;
+
+  return (
+    "https://www.google.com/maps/search/?api=1&query=" +
+    encodeURIComponent(query)
+  );
 }
 
 /* ===== FOUR-FEATURES 2026 ===== */
@@ -512,13 +501,9 @@ function getPreviousStopDirectionsUrl(
       continue;
     }
 
-    const start = encodeURIComponent(
-      `${origin.lat},${origin.lng}`
-    );
+    const start = encodeURIComponent(`${origin.lat},${origin.lng}`);
 
-    const end = encodeURIComponent(
-      `${destination.lat},${destination.lng}`
-    );
+    const end = encodeURIComponent(`${destination.lat},${destination.lng}`);
 
     return `https://www.google.com/maps/dir/?api=1&origin=${start}&destination=${end}&travelmode=${mode}`;
   }
@@ -623,17 +608,11 @@ function ProgressBar({
 }
 
 /* ===== 일정 시작 시각 차이 계산 ===== */
-function formatStartTimeGap(
-  current: string,
-  next: string
-): string | null {
+function formatStartTimeGap(current: string, next: string): string | null {
   const parse = (time: string): number | null => {
-    const match =
-      /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time.trim());
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time.trim());
 
-    return match
-      ? Number(match[1]) * 60 + Number(match[2])
-      : null;
+    return match ? Number(match[1]) * 60 + Number(match[2]) : null;
   };
 
   const from = parse(current);
@@ -644,16 +623,14 @@ function formatStartTimeGap(
   const minutes = to - from;
 
   // 10분 미만 또는 잘못된 시간은 표시하지 않음
-if (minutes <= 0) return null;
+  if (minutes <= 0) return null;
 
   if (minutes < 60) return `+${minutes}m`;
 
   const hours = Math.floor(minutes / 60);
   const remaining = minutes % 60;
 
-  return remaining === 0
-    ? `+${hours}h`
-    : `+${hours}h ${remaining}m`;
+  return remaining === 0 ? `+${hours}h` : `+${hours}h ${remaining}m`;
 }
 
 function App() {
@@ -810,10 +787,8 @@ function App() {
   // ===== 지도 선택창 열림/닫힘 =====
   const [showMapPicker, setShowMapPicker] = useState(false);
 
-
-const [showSavedPlaceList, setShowSavedPlaceList] = useState(false);
-const [savedPlaceQuery, setSavedPlaceQuery] = useState("");
-
+  const [showSavedPlaceList, setShowSavedPlaceList] = useState(false);
+  const [savedPlaceQuery, setSavedPlaceQuery] = useState("");
 
   const [stopCategory, setStopCategory] = useState<Stop["category"]>("spot");
 
@@ -982,9 +957,7 @@ const [savedPlaceQuery, setSavedPlaceQuery] = useState("");
 
     return mapCollection
       .filter((place) => {
-        const placeLabel =
-          place.mapLocation?.name?.trim() ||
-          place.name.trim();
+        const placeLabel = place.mapLocation?.name?.trim() || place.name.trim();
 
         const key = place.mapLocation
           ? `${placeLabel.toLowerCase()}:${place.mapLocation.lat.toFixed(5)},${place.mapLocation.lng.toFixed(5)}`
@@ -997,12 +970,11 @@ const [savedPlaceQuery, setSavedPlaceQuery] = useState("");
       })
       .sort(
         (a, b) =>
-          Number(b.category === "stay") -
-            Number(a.category === "stay") ||
+          Number(b.category === "stay") - Number(a.category === "stay") ||
           (a.mapLocation?.name || a.name).localeCompare(
             b.mapLocation?.name || b.name,
-            "ko"
-          )
+            "ko",
+          ),
       );
   }, [mapCollection]);
 
@@ -1019,7 +991,7 @@ const [savedPlaceQuery, setSavedPlaceQuery] = useState("");
       ]
         .join(" ")
         .toLowerCase()
-        .includes(query)
+        .includes(query),
     );
   }, [reusablePlaces, savedPlaceQuery]);
 
@@ -1105,30 +1077,28 @@ const [savedPlaceQuery, setSavedPlaceQuery] = useState("");
   }
 
   // ===== 새 일정 입력창 열기 =====
- 
-function openAddStop() {
-  setEditingStopId(null);
-  setStopMapLocation(null);
-  setStopMapUrl("");
 
-  setStopTime("");
-  setStopName("");
-  setStopDetail("");
-  setStopCategory("spot");
+  function openAddStop() {
+    setEditingStopId(null);
+    setStopMapLocation(null);
+    setStopMapUrl("");
 
-  setShowSavedPlaceList(false);
-  setSavedPlaceQuery("");
+    setStopTime("");
+    setStopName("");
+    setStopDetail("");
+    setStopCategory("spot");
 
-  setShowStopModal(true);
-}
+    setShowSavedPlaceList(false);
+    setSavedPlaceQuery("");
 
+    setShowStopModal(true);
+  }
 
-  
-function openEditStop(stop: Stop) {
-  setShowSavedPlaceList(false);
-  setSavedPlaceQuery("");
+  function openEditStop(stop: Stop) {
+    setShowSavedPlaceList(false);
+    setSavedPlaceQuery("");
 
-  // 아래의 기존 코드는 그대로 유지
+    // 아래의 기존 코드는 그대로 유지
 
     setEditingStopId(stop.id);
     // ===== 기존 일정에 등록된 지도 링크 불러오기 =====
@@ -1146,26 +1116,18 @@ function openEditStop(stop: Stop) {
   }
 
   // ===== 기존 장소 정보 불러오기 =====
-  function importSavedPlace(
-    place: (typeof mapCollection)[number]
-  ) {
-    const locationName =
-      place.mapLocation?.name?.trim();
+  function importSavedPlace(place: (typeof mapCollection)[number]) {
+    const locationName = place.mapLocation?.name?.trim();
 
     setStopName(
-      locationName &&
-        locationName !== "지도에서 선택한 위치"
+      locationName && locationName !== "지도에서 선택한 위치"
         ? locationName
-        : place.name
+        : place.name,
     );
 
     setStopCategory(place.category);
 
-    setStopMapLocation(
-      place.mapLocation
-        ? { ...place.mapLocation }
-        : null
-    );
+    setStopMapLocation(place.mapLocation ? { ...place.mapLocation } : null);
 
     setStopMapUrl(place.mapUrl ?? "");
 
@@ -1353,343 +1315,312 @@ function openEditStop(stop: Stop) {
     }
   >();
 
+  const groupGapLabels = new Map<number, string>();
 
-const groupGapLabels = new Map<number, string>();
+  if (tab === "plan") {
+    // 기존 거리 그룹 생성
+    const groups = buildNearbyGroups(selected.stops, distanceMeters);
 
-if (tab === "plan") {
-  // 기존 거리 그룹 생성
-  const groups = buildNearbyGroups(
-    selected.stops,
-    distanceMeters
-  );
+    groups.forEach((group, groupIndex) => {
+      for (let i = group.startIndex; i <= group.endIndex; i++) {
+        nearbyGroupByIndex.set(i, {
+          number: groupIndex + 1,
+          first: i === group.startIndex,
+          confirmed: group.confirmedCount,
+          temporary: group.temporaryCount,
+        });
+      }
+    });
 
-  groups.forEach((group, groupIndex) => {
-    for (
-      let i = group.startIndex;
-      i <= group.endIndex;
-      i++
-    ) {
-      nearbyGroupByIndex.set(i, {
-        number: groupIndex + 1,
-        first: i === group.startIndex,
-        confirmed: group.confirmedCount,
-        temporary: group.temporaryCount,
-      });
-    }
-  });
+    // 모든 일정 사이의 시작 시각 차이 계산
+    for (let i = 0; i < selected.stops.length - 1; i++) {
+      const label = formatStartTimeGap(
+        selected.stops[i].time,
+        selected.stops[i + 1].time,
+      );
 
-  // 모든 일정 사이의 시작 시각 차이 계산
-  for (
-    let i = 0;
-    i < selected.stops.length - 1;
-    i++
-  ) {
-    const label = formatStartTimeGap(
-      selected.stops[i].time,
-      selected.stops[i + 1].time
-    );
-
-    if (label) {
-      groupGapLabels.set(i, label);
+      if (label) {
+        groupGapLabels.set(i, label);
+      }
     }
   }
-}
-
 
   // ===== 날짜별 일정 목록: 왼쪽 스와이프로 수정·삭제 표시 =====
 
-  
-const stopList = (
-  <div
-    className={`stop-list ${
-      tab === "plan" ? "with-groups" : ""
-    }`}
-  >
-    {selected.stops.map((s, i) => (
-      <Fragment key={s.id}>
+  const stopList = (
+    <div className={`stop-list ${tab === "plan" ? "with-groups" : ""}`}>
+      {selected.stops.map((s, i) => (
+        <Fragment key={s.id}>
+          {/* ===== 그룹 첫 번째 장소 위에 제목 ===== */}
+          {nearbyGroupByIndex.get(i)?.first && (
+            <div className="nearby-group-heading">
+              <span className="nearby-group-number">
+                {String(nearbyGroupByIndex.get(i)!.number).padStart(2, "0")}
+              </span>
 
-        {/* ===== 그룹 첫 번째 장소 위에 제목 ===== */}
-        {nearbyGroupByIndex.get(i)?.first && (
-          <div className="nearby-group-heading">
-            <span className="nearby-group-number">
-              {String(
-                nearbyGroupByIndex.get(i)!.number
-              ).padStart(2, "0")}
-            </span>
+              <strong>밀집 장소</strong>
 
-            <strong>밀집 장소</strong>
-
-            <small>
-              {nearbyGroupByIndex.get(i)!.confirmed}곳 위치 확인
-              {nearbyGroupByIndex.get(i)!.temporary > 0 &&
-                ` · ${nearbyGroupByIndex.get(i)!.temporary}곳 임시 포함`}
-            </small>
-          </div>
-        )}
-
-        <div
-          className={`stop-swipe ${
-            nearbyGroupByIndex.has(i)
-              ? "in-nearby-group"
-              : ""
-          }`}
-
-          // 모바일: PointerCancel이 발생해도 touchend로 판정할 수 있게 별도 처리
-          onTouchStart={(e) => {
-            if (tab !== "plan" || e.touches.length !== 1) return;
-            const touch = e.touches[0];
-            swipeStart.current = { x: touch.clientX, y: touch.clientY };
-          }}
-          onTouchEnd={(e) => {
-            const touch = e.changedTouches[0];
-            if (!touch) return;
-            finishStopSwipe(s.id, touch.clientX, touch.clientY);
-          }}
-          onTouchCancel={() => {
-            swipeStart.current = null;
-          }}
-          // 데스크톱: 마우스·펜은 기존 포인터 이벤트 사용
-          onPointerDown={(e) => {
-            if (tab !== "plan" || e.pointerType === "touch") return;
-            if (e.pointerType === "mouse" && e.button !== 0) return;
-            swipeStart.current = { x: e.clientX, y: e.clientY };
-          }}
-          onPointerUp={(e) => {
-            if (e.pointerType === "touch") return;
-            finishStopSwipe(s.id, e.clientX, e.clientY);
-          }}
-          onPointerCancel={(e) => {
-            if (e.pointerType !== "touch") swipeStart.current = null;
-          }}
-        >
-          {/* ===== 왼쪽에 숨어 있는 경비·길찾기 메뉴 ===== */}
-          
-{tab === "plan" && openQuickSwipeId === s.id && (
-
-            <div
-              className={`stop-swipe-actions stop-swipe-actions-left ${
-                openQuickSwipeId === s.id ? "is-active" : ""
-              }`}
-              aria-hidden={openQuickSwipeId !== s.id}
-            >
-              {/* ===== 해당 일정에 연결해서 경비 추가 ===== */}
-              <button
-                type="button"
-                className="swipe-quick-expense"
-                tabIndex={openQuickSwipeId === s.id ? 0 : -1}
-                aria-label={`${s.name} 경비 추가`}
-                onClick={() => {
-                  setOpenQuickSwipeId(null);
-                  setExpenseFromStop(s.id);
-                  setTab("money");
-                }}
-              >
-                <Wallet size={17} />
-                <span>경비</span>
-              </button>
-
-              {/* ===== Google Maps 길찾기 ===== */}
-              {getPreviousStopDirectionsUrl(selected.stops, i, routeMode) ? (
-                <a
-                  className="swipe-quick-directions"
-                  href={getPreviousStopDirectionsUrl(selected.stops, i, routeMode)!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  tabIndex={openQuickSwipeId === s.id ? 0 : -1}
-                  aria-label={`${s.name} 길찾기`}
-                  onClick={() => setOpenQuickSwipeId(null)}
-                >
-                  <Navigation size={17} />
-                  <span>길찾기</span>
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  className="swipe-quick-directions"
-                  disabled
-                  title="먼저 일정에 지도 위치를 등록해 줘"
-                >
-                  <Navigation size={17} />
-                  <span>위치 없음</span>
-                </button>
-              )}
+              <small>
+                {nearbyGroupByIndex.get(i)!.confirmed}곳 위치 확인
+                {nearbyGroupByIndex.get(i)!.temporary > 0 &&
+                  ` · ${nearbyGroupByIndex.get(i)!.temporary}곳 임시 포함`}
+              </small>
             </div>
           )}
 
-          {/* ===== 오른쪽에 숨어 있는 수정·삭제 메뉴 ===== */}
-          
-{tab === "plan" && openSwipeId === s.id && (
-
-            
-<div
-  className={`stop-swipe-actions ${
-    openSwipeId === s.id ? "is-active" : ""
-  }`}
-  aria-hidden={openSwipeId !== s.id}
->
-
-              {/* ===== 일정 수정 버튼 ===== */}
-              <button
-                type="button"
-                className="swipe-edit"
-                tabIndex={openSwipeId === s.id ? 0 : -1}
-                aria-label={`${s.name} 수정`}
-                onClick={() => {
-                  setOpenSwipeId(null);
-                  openEditStop(s);
-                }}
-              >
-                <Pencil size={17} />
-                <span>수정</span>
-              </button>
-
-              {/* ===== 일정 삭제 버튼 ===== */}
-              <button
-                type="button"
-                className="swipe-delete"
-                tabIndex={openSwipeId === s.id ? 0 : -1}
-                aria-label={`${s.name} 삭제`}
-                onClick={() => {
-                  setOpenSwipeId(null);
-                  deleteStop(s);
-                }}
-              >
-                <Trash2 size={17} />
-                <span>삭제</span>
-              </button>
-            </div>
-          )}
-
-          {/* ===== 좌우로 움직이는 일정 본문 ===== */}
           <div
-            className={`stop-swipe-content ${
-              tab === "plan" && openSwipeId === s.id
-                ? "is-open"
-                : tab === "plan" && openQuickSwipeId === s.id
-                  ? "is-open-left"
-                  : ""
+            className={`stop-swipe ${
+              nearbyGroupByIndex.has(i) ? "in-nearby-group" : ""
             }`}
+            // 모바일: PointerCancel이 발생해도 touchend로 판정할 수 있게 별도 처리
+            onTouchStart={(e) => {
+              if (tab !== "plan" || e.touches.length !== 1) return;
+              const touch = e.touches[0];
+              swipeStart.current = { x: touch.clientX, y: touch.clientY };
+            }}
+            onTouchEnd={(e) => {
+              const touch = e.changedTouches[0];
+              if (!touch) return;
+              finishStopSwipe(s.id, touch.clientX, touch.clientY);
+            }}
+            onTouchCancel={() => {
+              swipeStart.current = null;
+            }}
+            // 데스크톱: 마우스·펜은 기존 포인터 이벤트 사용
+            onPointerDown={(e) => {
+              if (tab !== "plan" || e.pointerType === "touch") return;
+              if (e.pointerType === "mouse" && e.button !== 0) return;
+              swipeStart.current = { x: e.clientX, y: e.clientY };
+            }}
+            onPointerUp={(e) => {
+              if (e.pointerType === "touch") return;
+              finishStopSwipe(s.id, e.clientX, e.clientY);
+            }}
+            onPointerCancel={(e) => {
+              if (e.pointerType !== "touch") swipeStart.current = null;
+            }}
           >
-            
-<div
-  className={`stop-row ${
-    visited.includes(s.id) ? "visited" : ""
-  }`}
-  data-category={s.category}
->
+            {/* ===== 왼쪽에 숨어 있는 경비·길찾기 메뉴 ===== */}
 
-              {/* ===== 일정 탭: 완료 체크 / 메뉴 닫기 ===== */}
-
-              {/* ===== 일정 내용과 완료 체크를 별도로 분리 ===== */}
-              <div className="stop-visit">
-                {/* ===== 동그라미 클릭: 방문 완료 체크 ===== */}
+            {tab === "plan" && openQuickSwipeId === s.id && (
+              <div
+                className={`stop-swipe-actions stop-swipe-actions-left ${
+                  openQuickSwipeId === s.id ? "is-active" : ""
+                }`}
+                aria-hidden={openQuickSwipeId !== s.id}
+              >
+                {/* ===== 해당 일정에 연결해서 경비 추가 ===== */}
                 <button
                   type="button"
-                  className="stop-check-button"
-                  aria-label={`${s.name} 방문 완료 체크`}
-                  aria-pressed={visited.includes(s.id)}
+                  className="swipe-quick-expense"
+                  tabIndex={openQuickSwipeId === s.id ? 0 : -1}
+                  aria-label={`${s.name} 경비 추가`}
                   onClick={() => {
-                    // ===== 스와이프 직후 잘못된 클릭 방지 =====
-                    if (
-                      lastSwipe.current?.id === s.id &&
-                      Date.now() - lastSwipe.current.time < 500
-                    ) {
-                      return;
-                    }
-
-                    // ===== 수정·삭제 메뉴가 열렸으면 먼저 닫기 =====
-                    if (openSwipeId === s.id || openQuickSwipeId === s.id) {
-                      setOpenSwipeId(null);
-                      setOpenQuickSwipeId(null);
-                      return;
-                    }
-
-                    // ===== 완료 상태 변경 =====
-                    toggleVisited(s.id);
+                    setOpenQuickSwipeId(null);
+                    setExpenseFromStop(s.id);
+                    setTab("money");
                   }}
                 >
-                  <div className="stop-rail">
-                    <span
-                      className={`rail-dot ${
-                        visited.includes(s.id) ? "done" : ""
-                      }`}
-                    >
-                      {visited.includes(s.id) && (
-                        <Check size={12} strokeWidth={3} />
-                      )}
-                    </span>
-
-                    {/* ===== 기존 일정 연결선 유지 ===== */}
-                    
-{i !== selected.stops.length - 1 && (
-  <span className="rail-line" />
-)}
-
-{/* ===== 그룹 안의 다음 일정까지 시간 차이 ===== */}
-{groupGapLabels.has(i) && (
-  <span
-    className="rail-gap-label"
-    aria-hidden="true"
-  >
-    {groupGapLabels.get(i)}
-  </span>
-)}
-
-                  </div>
+                  <Wallet size={17} />
+                  <span>경비</span>
                 </button>
 
-                {/* ===== 일정 시간 ===== */}
-                <span className="stop-time">{s.time}</span>
-
-                {/* ===== 장소명 클릭: Google Maps 열기 ===== */}
-
-                <span className="stop-copy">
-                  {/* ===== 장소 이름 ===== */}
-                  {getGoogleMapsUrl(s) ? (
-                    <a
-                      href={getGoogleMapsUrl(s) ?? undefined}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="stop-name-link"
-                      
-                      
-onClick={(e) => {
-  if (
-    lastSwipe.current?.id === s.id &&
-    Date.now() - lastSwipe.current.time < 500
-  ) {
-    e.preventDefault();
-  }
-  e.stopPropagation();
-}}
-
-                    >
-                      <strong>{s.name}</strong>
-                    </a>
-                  ) : (
-                    <strong>{s.name}</strong>
-                  )}
-
-                  {/* ===== 장소 설명 ===== */}
-                  {s.detail && <small>{s.detail}</small>}
-
-                  {/* ===== 해당 장소에 연결된 경비 합계 ===== */}
-                  {tab === "plan" &&
-                    expenses.some((e) => e.stopId === s.id) && (
-                      <span className="trip-stop-spent">
-                        사용 {formatLinkedExpenseSummary(expenses, s.id)}
-                      </span>
-                    )}
-                </span>
-
-                {/* ===== 홈 화면에서만 화살표 표시 ===== */}
-                {tab === "home" && (
-                  <ChevronRight className="row-chevron" size={17} />
+                {/* ===== Google Maps 길찾기 ===== */}
+                {getPreviousStopDirectionsUrl(selected.stops, i, routeMode) ? (
+                  <a
+                    className="swipe-quick-directions"
+                    href={
+                      getPreviousStopDirectionsUrl(
+                        selected.stops,
+                        i,
+                        routeMode,
+                      )!
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    tabIndex={openQuickSwipeId === s.id ? 0 : -1}
+                    aria-label={`${s.name} 길찾기`}
+                    onClick={() => setOpenQuickSwipeId(null)}
+                  >
+                    <Navigation size={17} />
+                    <span>길찾기</span>
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    className="swipe-quick-directions"
+                    disabled
+                    title="먼저 일정에 지도 위치를 등록해 줘"
+                  >
+                    <Navigation size={17} />
+                    <span>위치 없음</span>
+                  </button>
                 )}
+              </div>
+            )}
+
+            {/* ===== 오른쪽에 숨어 있는 수정·삭제 메뉴 ===== */}
+
+            {tab === "plan" && openSwipeId === s.id && (
+              <div
+                className={`stop-swipe-actions ${
+                  openSwipeId === s.id ? "is-active" : ""
+                }`}
+                aria-hidden={openSwipeId !== s.id}
+              >
+                {/* ===== 일정 수정 버튼 ===== */}
+                <button
+                  type="button"
+                  className="swipe-edit"
+                  tabIndex={openSwipeId === s.id ? 0 : -1}
+                  aria-label={`${s.name} 수정`}
+                  onClick={() => {
+                    setOpenSwipeId(null);
+                    openEditStop(s);
+                  }}
+                >
+                  <Pencil size={17} />
+                  <span>수정</span>
+                </button>
+
+                {/* ===== 일정 삭제 버튼 ===== */}
+                <button
+                  type="button"
+                  className="swipe-delete"
+                  tabIndex={openSwipeId === s.id ? 0 : -1}
+                  aria-label={`${s.name} 삭제`}
+                  onClick={() => {
+                    setOpenSwipeId(null);
+                    deleteStop(s);
+                  }}
+                >
+                  <Trash2 size={17} />
+                  <span>삭제</span>
+                </button>
+              </div>
+            )}
+
+            {/* ===== 좌우로 움직이는 일정 본문 ===== */}
+            <div
+              className={`stop-swipe-content ${
+                tab === "plan" && openSwipeId === s.id
+                  ? "is-open"
+                  : tab === "plan" && openQuickSwipeId === s.id
+                    ? "is-open-left"
+                    : ""
+              }`}
+            >
+              <div
+                className={`stop-row ${
+                  visited.includes(s.id) ? "visited" : ""
+                }`}
+                data-category={s.category}
+              >
+                {/* ===== 일정 탭: 완료 체크 / 메뉴 닫기 ===== */}
+
+                {/* ===== 일정 내용과 완료 체크를 별도로 분리 ===== */}
+                <div className="stop-visit">
+                  {/* ===== 동그라미 클릭: 방문 완료 체크 ===== */}
+                  <button
+                    type="button"
+                    className="stop-check-button"
+                    aria-label={`${s.name} 방문 완료 체크`}
+                    aria-pressed={visited.includes(s.id)}
+                    onClick={() => {
+                      // ===== 스와이프 직후 잘못된 클릭 방지 =====
+                      if (
+                        lastSwipe.current?.id === s.id &&
+                        Date.now() - lastSwipe.current.time < 500
+                      ) {
+                        return;
+                      }
+
+                      // ===== 수정·삭제 메뉴가 열렸으면 먼저 닫기 =====
+                      if (openSwipeId === s.id || openQuickSwipeId === s.id) {
+                        setOpenSwipeId(null);
+                        setOpenQuickSwipeId(null);
+                        return;
+                      }
+
+                      // ===== 완료 상태 변경 =====
+                      toggleVisited(s.id);
+                    }}
+                  >
+                    <div className="stop-rail">
+                      <span
+                        className={`rail-dot ${
+                          visited.includes(s.id) ? "done" : ""
+                        }`}
+                      >
+                        {visited.includes(s.id) && (
+                          <Check size={12} strokeWidth={3} />
+                        )}
+                      </span>
+
+                      {/* ===== 기존 일정 연결선 유지 ===== */}
+
+                      {i !== selected.stops.length - 1 && (
+                        <span className="rail-line" />
+                      )}
+
+                      {/* ===== 그룹 안의 다음 일정까지 시간 차이 ===== */}
+                      {groupGapLabels.has(i) && (
+                        <span className="rail-gap-label" aria-hidden="true">
+                          {groupGapLabels.get(i)}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* ===== 일정 시간 ===== */}
+                  <span className="stop-time">{s.time}</span>
+
+                  {/* ===== 장소명 클릭: Google Maps 열기 ===== */}
+
+                  <span className="stop-copy">
+                    {/* ===== 장소 이름 ===== */}
+                    {getGoogleMapsUrl(s) ? (
+                      <a
+                        href={getGoogleMapsUrl(s) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="stop-name-link"
+                        onClick={(e) => {
+                          if (
+                            lastSwipe.current?.id === s.id &&
+                            Date.now() - lastSwipe.current.time < 500
+                          ) {
+                            e.preventDefault();
+                          }
+                          e.stopPropagation();
+                        }}
+                      >
+                        <strong>{s.name}</strong>
+                      </a>
+                    ) : (
+                      <strong>{s.name}</strong>
+                    )}
+
+                    {/* ===== 장소 설명 ===== */}
+                    {s.detail && <small>{s.detail}</small>}
+
+                    {/* ===== 해당 장소에 연결된 경비 합계 ===== */}
+                    {tab === "plan" &&
+                      expenses.some((e) => e.stopId === s.id) && (
+                        <span className="trip-stop-spent">
+                          사용 {formatLinkedExpenseSummary(expenses, s.id)}
+                        </span>
+                      )}
+                  </span>
+
+                  {/* ===== 홈 화면에서만 화살표 표시 ===== */}
+                  {tab === "home" && (
+                    <ChevronRight className="row-chevron" size={17} />
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
         </Fragment>
       ))}
     </div>
@@ -1921,32 +1852,30 @@ onClick={(e) => {
                 >
                   <p style={{ margin: 0, minWidth: 0 }}>{selected.subtitle}</p>
 
-                  
-<button
-  type="button"
-  className="plan-map-top-button"
-  onClick={() => setShowDayMap(true)}
-  style={{
-    width: "auto",
-    flexShrink: 0,
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-    padding: "2px 0",
-    fontSize: 10,
-    whiteSpace: "nowrap",
-    border: "none",
-    background: "transparent",
-    boxShadow: "none",
-    borderRadius: 0,
-    color: "#6a7756",
-    cursor: "pointer",
-  }}
->
-  <MapPin size={12} />
-  지도로 한눈에 보기
-</button>
-
+                  <button
+                    type="button"
+                    className="plan-map-top-button"
+                    onClick={() => setShowDayMap(true)}
+                    style={{
+                      width: "auto",
+                      flexShrink: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "2px 0",
+                      fontSize: 10,
+                      whiteSpace: "nowrap",
+                      border: "none",
+                      background: "transparent",
+                      boxShadow: "none",
+                      borderRadius: 0,
+                      color: "#6a7756",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <MapPin size={12} />
+                    지도로 한눈에 보기
+                  </button>
                 </div>
               </div>
 
@@ -2355,72 +2284,67 @@ onClick={(e) => {
 
             {/* ===== 일정 입력 폼 ===== */}
             <form onSubmit={saveStop}>
+              {/* ===== 저장된 장소에서 가져오기 ===== */}
+              <div className="saved-place-import">
+                <button
+                  type="button"
+                  className="saved-place-import-toggle"
+                  aria-expanded={showSavedPlaceList}
+                  onClick={() => {
+                    setShowSavedPlaceList((open) => !open);
+                    setSavedPlaceQuery("");
+                  }}
+                >
+                  <span>
+                    <Bookmark size={15} />
+                    저장된 장소 가져오기
+                  </span>
+                  <ChevronRight size={15} />
+                </button>
 
-{/* ===== 저장된 장소에서 가져오기 ===== */}
-<div className="saved-place-import">
-  <button
-    type="button"
-    className="saved-place-import-toggle"
-    aria-expanded={showSavedPlaceList}
-    onClick={() => {
-      setShowSavedPlaceList((open) => !open);
-      setSavedPlaceQuery("");
-    }}
-  >
-    <span>
-      <Bookmark size={15} />
-      저장된 장소 가져오기
-    </span>
-    <ChevronRight size={15} />
-  </button>
+                {showSavedPlaceList && (
+                  <div className="saved-place-import-panel">
+                    <input
+                      type="search"
+                      value={savedPlaceQuery}
+                      onChange={(e) => setSavedPlaceQuery(e.target.value)}
+                      placeholder="장소명 · 숙소 · 주소 검색"
+                      aria-label="저장된 장소 검색"
+                    />
 
-  {showSavedPlaceList && (
-    <div className="saved-place-import-panel">
-      <input
-        type="search"
-        value={savedPlaceQuery}
-        onChange={(e) =>
-          setSavedPlaceQuery(e.target.value)
-        }
-        placeholder="장소명 · 숙소 · 주소 검색"
-        aria-label="저장된 장소 검색"
-      />
+                    <div className="saved-place-import-results">
+                      {filteredReusablePlaces.length === 0 ? (
+                        <p className="saved-place-import-empty">
+                          {reusablePlaces.length === 0
+                            ? "위치를 연결해 저장한 일정이 아직 없어."
+                            : "검색 결과가 없어."}
+                        </p>
+                      ) : (
+                        filteredReusablePlaces.map((place) => (
+                          <button
+                            key={place.id}
+                            type="button"
+                            className="saved-place-import-option"
+                            onClick={() => importSavedPlace(place)}
+                          >
+                            <strong>
+                              {place.mapLocation?.name || place.name}
+                            </strong>
 
-      <div className="saved-place-import-results">
-        {filteredReusablePlaces.length === 0 ? (
-          <p className="saved-place-import-empty">
-            {reusablePlaces.length === 0
-              ? "위치를 연결해 저장한 일정이 아직 없어."
-              : "검색 결과가 없어."}
-          </p>
-        ) : (
-          filteredReusablePlaces.map((place) => (
-            <button
-              key={place.id}
-              type="button"
-              className="saved-place-import-option"
-              onClick={() => importSavedPlace(place)}
-            >
-              <strong>
-                {place.mapLocation?.name || place.name}
-              </strong>
-
-              <small>
-                {place.category === "stay"
-                  ? "숙소 · "
-                  : ""}
-                12월 {place.day}일 등록
-                {place.mapLocation?.address
-                  ? ` · ${place.mapLocation.address}`
-                  : ""}
-              </small>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
-  )}
-</div>
+                            <small>
+                              {place.category === "stay" ? "숙소 · " : ""}
+                              12월 {place.day}일 등록
+                              {place.mapLocation?.address
+                                ? ` · ${place.mapLocation.address}`
+                                : ""}
+                            </small>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* ===== 시간: 기기 기본 시간 선택기 ===== */}
               <label>
