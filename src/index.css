@@ -1303,7 +1303,8 @@ color: #282B26;
   overflow-y: auto;
 }
 
-/* ===== 일정 한 줄: 스와이프 영역 ===== */
+/* ===== 일정 한 줄: 스와이프 영역 ===== *
+
 .stop-swipe {
   position: relative;
   width: 100%;
@@ -2201,4 +2202,219 @@ width: 50px;
   padding: 12px 8px;
   color: #92988d;
   font-size: 12px;
+}
+
+
+/* ===== 거리별 자동 그룹 제목 ===== */
+.stop-list.with-groups .nearby-group-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 9px;
+  color: #607452;
+}
+
+.stop-list.with-groups .nearby-group-number {
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #e8eee2;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.stop-list.with-groups .nearby-group-heading strong {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.stop-list.with-groups .nearby-group-heading small {
+  margin-left: auto;
+  font-size: 10px;
+  color: #9aa292;
+}
+
+/* ===== 그룹에 포함된 일정 연결 표시 ===== */
+.stop-list.with-groups
+.in-nearby-group
+.stop-swipe-content {
+  box-shadow: inset 2px 0 0 #c8d3be;
+}
+
+/* ===== 숙소는 차분하게 ===== */
+.stop-list.with-groups
+.stop-row[data-category="stay"]
+.stop-time,
+
+.stop-list.with-groups
+.stop-row[data-category="stay"]
+.stop-copy {
+  opacity: 0.58;
+}
+
+/* ===== 식당과 카페만 강조 ===== */
+.stop-list.with-groups
+.stop-row[data-category="food"],
+
+.stop-list.with-groups
+.stop-row[data-category="cafe"] {
+  background: #e9efe3;
+  border-radius: 10px;
+  padding: 7px 8px 0 4px;
+}
+
+/* ===== 식사 장소명 ===== */
+.stop-list.with-groups
+.stop-row[data-category="food"]
+.stop-copy strong,
+
+.stop-list.with-groups
+.stop-row[data-category="cafe"]
+.stop-copy strong {
+  color: #3d5736;
+}
+
+/* ===== 스와이프 메뉴 위치 오류 수정 ===== */
+
+/* 각 일정 행을 메뉴의 위치 기준으로 고정 */
+.stop-list.with-groups .stop-swipe {
+  position: relative !important;
+  display: block !important;
+  width: 100%;
+  height: auto !important;
+  overflow: hidden !important;
+  contain: layout;
+  isolation: isolate;
+}
+
+/* 실제 일정 내용 */
+.stop-list.with-groups .stop-swipe-content {
+  position: relative !important;
+  z-index: 2;
+  width: 100%;
+}
+
+/* 버튼이 해당 일정의 높이만 차지하게 */
+.stop-list.with-groups .stop-swipe-actions {
+  position: absolute !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  height: auto !important;
+  width: 116px !important;
+  z-index: 1;
+  display: flex;
+  align-items: stretch;
+}
+
+/* 오른쪽으로 밀었을 때 왼쪽에 나타나는 메뉴 */
+.stop-list.with-groups .stop-swipe-actions-left {
+  left: 0 !important;
+  right: auto !important;
+}
+
+/* 왼쪽으로 밀었을 때 오른쪽에 나타나는 메뉴 */
+.stop-list.with-groups
+.stop-swipe-actions:not(.stop-swipe-actions-left) {
+  left: auto !important;
+  right: 0 !important;
+}
+
+/* 버튼 높이를 해당 일정에 맞춤 */
+.stop-list.with-groups .stop-swipe-actions > button,
+.stop-list.with-groups .stop-swipe-actions > a {
+  min-height: 0;
+  height: 100%;
+}
+
+
+/* ===== 숙소: 연한 회색 배경 ===== */
+.stop-list.with-groups
+.stop-row[data-category="stay"] {
+  background: #ebedeb;
+  border-radius: 10px;
+  padding: 7px 8px 0 4px;
+}
+
+/* ===== 숙소: 글씨 톤다운 ===== */
+.stop-list.with-groups
+.stop-row[data-category="stay"] .stop-time,
+.stop-list.with-groups
+.stop-row[data-category="stay"] .stop-copy {
+  opacity: 1;
+  color: #282b26
+}
+
+/* ===== 숙소 이름 ===== */
+.stop-list.with-groups
+.stop-row[data-category="stay"] .stop-copy strong {
+  color: #282b26;
+  font-weight: 650;
+}
+
+/* ===== 숙소 설명 ===== */
+.stop-list.with-groups
+.stop-row[data-category="stay"] .stop-copy small {
+  color: #929992;
+}
+
+/* ===== 숙소·식사 카드 구간 여백 ===== */
+
+.stop-list.with-groups
+.stop-swipe:has(.stop-row[data-category="stay"]),
+
+.stop-list.with-groups
+.stop-swipe:has(.stop-row[data-category="food"]),
+
+.stop-list.with-groups
+.stop-swipe:has(.stop-row[data-category="cafe"]) {
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+
+
+/* ===== 일반 관광지 일정 사이 여백 ===== */
+.stop-list.with-groups .stop-swipe {
+  margin-bottom: 4px;
+}
+
+/* 마지막 일정 아래에는 불필요한 여백 제거 */
+.stop-list.with-groups .stop-swipe:last-child {
+  margin-bottom: 0;
+}
+
+
+/* 모든 일정의 동그라미 시작 위치 통일 */
+.stop-list.with-groups .stop-row {
+  padding-top: 4px;
+  padding-left: 4px;
+}
+
+/* 그룹의 마지막 장소 아래쪽 여백 */
+.stop-list.with-groups
+.stop-swipe.in-nearby-group:not(:has(+ .in-nearby-group)):not(:last-child) {
+  margin-bottom: 16px;
+}
+
+/* ===== 타임라인 세로선 옆 시간 차이 ===== */
+.stop-list.with-groups .rail-gap-label {
+  position: absolute;
+  top: 52%;
+  left: calc(100% + 8px);
+  transform: translateY(-50%);
+  z-index: 3;
+
+  display: block;
+  padding: 1px 1px;
+  white-space: nowrap;
+
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.15px;
+
+  color: #9ba696;
+  background: #f6f5f1;
+
+  pointer-events: none;
+  user-select: none;
 }

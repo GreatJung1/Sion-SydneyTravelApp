@@ -1,6 +1,9 @@
 import SydneyWeather from "./components/SydneyWeather";
 import DailyRouteMap from "./components/DailyRouteMap";
 
+import { buildNearbyGroups } from "./itineraryGroups";
+
+
 /* ===== Firebase 공동 일정/방문/경비 동기화 ===== */
 import {
   watchSharedTrip,
@@ -35,7 +38,15 @@ import type { MapLocation } from "./components/MapPicker";
 import "./map-picker.css";
 
 /* ===== React 상태 및 스와이프 위치 관리 ===== */
-import { useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
 import type { FormEvent, ReactNode } from "react";
 
 import {
@@ -473,6 +484,48 @@ function getDirectionsUrl(stop: Stop, mode: DirectionsMode): string | null {
   return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=${mode}`;
 }
 
+/* ===== 이전 일정 장소에서 출발하는 길찾기 ===== */
+function getPreviousStopDirectionsUrl(
+  stops: readonly Stop[],
+  destinationIndex: number,
+  mode: DirectionsMode,
+): string | null {
+  const destination = stops[destinationIndex]?.mapLocation;
+
+  if (
+    !destination ||
+    !Number.isFinite(destination.lat) ||
+    !Number.isFinite(destination.lng)
+  ) {
+    return null;
+  }
+
+  // 이전 일정부터 역순으로 위치 등록 장소 찾기
+  for (let i = destinationIndex - 1; i >= 0; i--) {
+    const origin = stops[i].mapLocation;
+
+    if (
+      !origin ||
+      !Number.isFinite(origin.lat) ||
+      !Number.isFinite(origin.lng)
+    ) {
+      continue;
+    }
+
+    const start = encodeURIComponent(
+      `${origin.lat},${origin.lng}`
+    );
+
+    const end = encodeURIComponent(
+      `${destination.lat},${destination.lng}`
+    );
+
+    return `https://www.google.com/maps/dir/?api=1&origin=${start}&destination=${end}&travelmode=${mode}`;
+  }
+
+  return null;
+}
+
 /* ===== 좌표 간 직선거리 (m): Haversine 공식 ===== */
 function distanceMeters(
   a: { lat: number; lng: number },
@@ -567,6 +620,40 @@ function ProgressBar({
       />
     </div>
   );
+}
+
+/* ===== 일정 시작 시각 차이 계산 ===== */
+function formatStartTimeGap(
+  current: string,
+  next: string
+): string | null {
+  const parse = (time: string): number | null => {
+    const match =
+      /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time.trim());
+
+    return match
+      ? Number(match[1]) * 60 + Number(match[2])
+      : null;
+  };
+
+  const from = parse(current);
+  const to = parse(next);
+
+  if (from === null || to === null) return null;
+
+  const minutes = to - from;
+
+  // 10분 미만 또는 잘못된 시간은 표시하지 않음
+if (minutes <= 0) return null;
+
+  if (minutes < 60) return `+${minutes}m`;
+
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+
+  return remaining === 0
+    ? `+${hours}h`
+    : `+${hours}h ${remaining}m`;
 }
 
 function App() {
@@ -671,6 +758,40 @@ function App() {
 
   // ===== 스와이프 직후 일반 클릭이 실행되지 않도록 방지 =====
   const lastSwipe = useRef<{ id: string; time: number } | null>(null);
+
+  // 모바일 touchend와 데스크톱 pointerup에서 공통으로 호출
+  function finishStopSwipe(stopId: string, clientX: number, clientY: number) {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+
+    if (tab !== "plan" || !start) return;
+
+    const dx = clientX - start.x;
+    const dy = clientY - start.y;
+
+    // 세로 스크롤이나 일반 탭은 스와이프로 처리하지 않음
+    if (Math.abs(dx) < 40 || Math.abs(dx) <= Math.abs(dy)) return;
+
+    lastSwipe.current = { id: stopId, time: Date.now() };
+
+    if (dx < 0) {
+      // 왼쪽 스와이프: 수정·삭제 / 오른쪽 메뉴가 열려 있으면 먼저 닫음
+      if (openQuickSwipeId === stopId) {
+        setOpenQuickSwipeId(null);
+      } else {
+        setOpenSwipeId(stopId);
+        setOpenQuickSwipeId(null);
+      }
+    } else {
+      // 오른쪽 스와이프: 경비·길찾기 / 왼쪽 메뉴가 열려 있으면 먼저 닫음
+      if (openSwipeId === stopId) {
+        setOpenSwipeId(null);
+      } else {
+        setOpenQuickSwipeId(stopId);
+        setOpenSwipeId(null);
+      }
+    }
+  }
 
   // ===== 일정 입력값 =====
   const [stopTime, setStopTime] = useState("");
@@ -1221,71 +1342,130 @@ function openEditStop(stop: Stop) {
     /* ===== 날짜별 일정 목록 ===== */
   }
 
+  // ===== 날짜별 거리 그룹 정보 =====
+  const nearbyGroupByIndex = new Map<
+    number,
+    {
+      number: number;
+      first: boolean;
+      confirmed: number;
+      temporary: number;
+    }
+  >();
+
+
+const groupGapLabels = new Map<number, string>();
+
+if (tab === "plan") {
+  // 기존 거리 그룹 생성
+  const groups = buildNearbyGroups(
+    selected.stops,
+    distanceMeters
+  );
+
+  groups.forEach((group, groupIndex) => {
+    for (
+      let i = group.startIndex;
+      i <= group.endIndex;
+      i++
+    ) {
+      nearbyGroupByIndex.set(i, {
+        number: groupIndex + 1,
+        first: i === group.startIndex,
+        confirmed: group.confirmedCount,
+        temporary: group.temporaryCount,
+      });
+    }
+  });
+
+  // 모든 일정 사이의 시작 시각 차이 계산
+  for (
+    let i = 0;
+    i < selected.stops.length - 1;
+    i++
+  ) {
+    const label = formatStartTimeGap(
+      selected.stops[i].time,
+      selected.stops[i + 1].time
+    );
+
+    if (label) {
+      groupGapLabels.set(i, label);
+    }
+  }
+}
+
+
   // ===== 날짜별 일정 목록: 왼쪽 스와이프로 수정·삭제 표시 =====
-  const stopList = (
-    <div className="stop-list">
-      {selected.stops.map((s, i) => (
+
+  
+const stopList = (
+  <div
+    className={`stop-list ${
+      tab === "plan" ? "with-groups" : ""
+    }`}
+  >
+    {selected.stops.map((s, i) => (
+      <Fragment key={s.id}>
+
+        {/* ===== 그룹 첫 번째 장소 위에 제목 ===== */}
+        {nearbyGroupByIndex.get(i)?.first && (
+          <div className="nearby-group-heading">
+            <span className="nearby-group-number">
+              {String(
+                nearbyGroupByIndex.get(i)!.number
+              ).padStart(2, "0")}
+            </span>
+
+            <strong>밀집 장소</strong>
+
+            <small>
+              {nearbyGroupByIndex.get(i)!.confirmed}곳 위치 확인
+              {nearbyGroupByIndex.get(i)!.temporary > 0 &&
+                ` · ${nearbyGroupByIndex.get(i)!.temporary}곳 임시 포함`}
+            </small>
+          </div>
+        )}
+
         <div
-          key={s.id}
-          className="stop-swipe"
-          // ===== 손가락 또는 마우스를 누른 시작 위치 저장 =====
+          className={`stop-swipe ${
+            nearbyGroupByIndex.has(i)
+              ? "in-nearby-group"
+              : ""
+          }`}
+
+          // 모바일: PointerCancel이 발생해도 touchend로 판정할 수 있게 별도 처리
+          onTouchStart={(e) => {
+            if (tab !== "plan" || e.touches.length !== 1) return;
+            const touch = e.touches[0];
+            swipeStart.current = { x: touch.clientX, y: touch.clientY };
+          }}
+          onTouchEnd={(e) => {
+            const touch = e.changedTouches[0];
+            if (!touch) return;
+            finishStopSwipe(s.id, touch.clientX, touch.clientY);
+          }}
+          onTouchCancel={() => {
+            swipeStart.current = null;
+          }}
+          // 데스크톱: 마우스·펜은 기존 포인터 이벤트 사용
           onPointerDown={(e) => {
-            if (tab !== "plan") return;
+            if (tab !== "plan" || e.pointerType === "touch") return;
             if (e.pointerType === "mouse" && e.button !== 0) return;
-
-            swipeStart.current = {
-              x: e.clientX,
-              y: e.clientY,
-            };
+            swipeStart.current = { x: e.clientX, y: e.clientY };
           }}
-          // ===== 좌우 스와이프 방향 판단 =====
           onPointerUp={(e) => {
-            if (tab !== "plan" || !swipeStart.current) return;
-
-            const dx = e.clientX - swipeStart.current.x;
-            const dy = e.clientY - swipeStart.current.y;
-
-            swipeStart.current = null;
-
-            // 일반 클릭이나 세로 스크롤은 제외
-            if (Math.abs(dx) < 40 || Math.abs(dx) <= Math.abs(dy)) {
-              return;
-            }
-
-            lastSwipe.current = {
-              id: s.id,
-              time: Date.now(),
-            };
-
-            // 왼쪽으로 밀면 열기, 오른쪽으로 밀면 닫기
-            // ===== 왼쪽으로 밀기: 기존 수정·삭제 메뉴 =====
-            // ===== 오른쪽으로 밀기: 신규 경비·길찾기 메뉴 =====
-
-            if (dx < 0) {
-              // 경비·길찾기 메뉴가 열려 있었다면 먼저 닫기
-              if (openQuickSwipeId === s.id) {
-                setOpenQuickSwipeId(null);
-              } else {
-                setOpenSwipeId(s.id);
-                setOpenQuickSwipeId(null);
-              }
-            } else {
-              // 수정·삭제 메뉴가 열려 있었다면 먼저 닫기
-              if (openSwipeId === s.id) {
-                setOpenSwipeId(null);
-              } else {
-                setOpenQuickSwipeId(s.id);
-                setOpenSwipeId(null);
-              }
-            }
+            if (e.pointerType === "touch") return;
+            finishStopSwipe(s.id, e.clientX, e.clientY);
           }}
-          // ===== 스크롤 등으로 동작이 취소되면 초기화 =====
-          onPointerCancel={() => {
-            swipeStart.current = null;
+          onPointerCancel={(e) => {
+            if (e.pointerType !== "touch") swipeStart.current = null;
           }}
         >
           {/* ===== 왼쪽에 숨어 있는 경비·길찾기 메뉴 ===== */}
-          {tab === "plan" && (
+          
+{tab === "plan" && openQuickSwipeId === s.id && (
+
             <div
               className={`stop-swipe-actions stop-swipe-actions-left ${
                 openQuickSwipeId === s.id ? "is-active" : ""
@@ -1309,10 +1489,10 @@ function openEditStop(stop: Stop) {
               </button>
 
               {/* ===== Google Maps 길찾기 ===== */}
-              {getDirectionsUrl(s, routeMode) ? (
+              {getPreviousStopDirectionsUrl(selected.stops, i, routeMode) ? (
                 <a
                   className="swipe-quick-directions"
-                  href={getDirectionsUrl(s, routeMode)!}
+                  href={getPreviousStopDirectionsUrl(selected.stops, i, routeMode)!}
                   target="_blank"
                   rel="noopener noreferrer"
                   tabIndex={openQuickSwipeId === s.id ? 0 : -1}
@@ -1337,11 +1517,17 @@ function openEditStop(stop: Stop) {
           )}
 
           {/* ===== 오른쪽에 숨어 있는 수정·삭제 메뉴 ===== */}
-          {tab === "plan" && (
-            <div
-              className="stop-swipe-actions"
-              aria-hidden={openSwipeId !== s.id}
-            >
+          
+{tab === "plan" && openSwipeId === s.id && (
+
+            
+<div
+  className={`stop-swipe-actions ${
+    openSwipeId === s.id ? "is-active" : ""
+  }`}
+  aria-hidden={openSwipeId !== s.id}
+>
+
               {/* ===== 일정 수정 버튼 ===== */}
               <button
                 type="button"
@@ -1384,9 +1570,14 @@ function openEditStop(stop: Stop) {
                   : ""
             }`}
           >
-            <div
-              className={`stop-row ${visited.includes(s.id) ? "visited" : ""}`}
-            >
+            
+<div
+  className={`stop-row ${
+    visited.includes(s.id) ? "visited" : ""
+  }`}
+  data-category={s.category}
+>
+
               {/* ===== 일정 탭: 완료 체크 / 메뉴 닫기 ===== */}
 
               {/* ===== 일정 내용과 완료 체크를 별도로 분리 ===== */}
@@ -1429,9 +1620,21 @@ function openEditStop(stop: Stop) {
                     </span>
 
                     {/* ===== 기존 일정 연결선 유지 ===== */}
-                    {i !== selected.stops.length - 1 && (
-                      <span className="rail-line" />
-                    )}
+                    
+{i !== selected.stops.length - 1 && (
+  <span className="rail-line" />
+)}
+
+{/* ===== 그룹 안의 다음 일정까지 시간 차이 ===== */}
+{groupGapLabels.has(i) && (
+  <span
+    className="rail-gap-label"
+    aria-hidden="true"
+  >
+    {groupGapLabels.get(i)}
+  </span>
+)}
+
                   </div>
                 </button>
 
@@ -1448,9 +1651,18 @@ function openEditStop(stop: Stop) {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="stop-name-link"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onPointerUp={(e) => e.stopPropagation()}
-                      onClick={(e) => e.stopPropagation()}
+                      
+                      
+onClick={(e) => {
+  if (
+    lastSwipe.current?.id === s.id &&
+    Date.now() - lastSwipe.current.time < 500
+  ) {
+    e.preventDefault();
+  }
+  e.stopPropagation();
+}}
+
                     >
                       <strong>{s.name}</strong>
                     </a>
@@ -1478,6 +1690,7 @@ function openEditStop(stop: Stop) {
             </div>
           </div>
         </div>
+        </Fragment>
       ))}
     </div>
   );
